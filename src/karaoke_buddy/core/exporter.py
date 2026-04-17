@@ -96,6 +96,8 @@ class Exporter:
             "aac",
             "-b:a",
             "192k",
+            "-f",
+            "mp4",
             "-progress",
             "pipe:1",
             str(output_path),
