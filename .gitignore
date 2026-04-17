@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/dist/
+build/work/
+*.spec
+cache/
+logs/
+library.json
+library.json.corrupted-*
+data/
+*.tmp
