@@ -40,6 +40,13 @@ class Exporter:
         tmp = output_path.with_suffix(".tmp")
         try:
             self._run(input_path, filter_chain, tmp, progress_callback, video_copy=True)
+        except FileNotFoundError as exc:
+            # ffmpeg binary not found — clean up and surface a plain-English error.
+            if tmp.exists():
+                tmp.unlink()
+            raise RuntimeError(
+                "FFmpeg was not found. Please re-download KaraokeBuddy."
+            ) from exc
         except subprocess.CalledProcessError:
             log.info("Stream-copy failed; retrying with libx264 re-encode")
             if tmp.exists():
@@ -48,6 +55,12 @@ class Exporter:
                 self._run(
                     input_path, filter_chain, tmp, progress_callback, video_copy=False
                 )
+            except FileNotFoundError as exc:
+                if tmp.exists():
+                    tmp.unlink()
+                raise RuntimeError(
+                    "FFmpeg was not found. Please re-download KaraokeBuddy."
+                ) from exc
             except subprocess.CalledProcessError as exc:
                 if tmp.exists():
                     tmp.unlink()
