@@ -18,7 +18,12 @@ from PySide6.QtWidgets import (
 from karaoke_buddy.core.exporter import ExportThread
 from karaoke_buddy.core.filter_chain import build_filter_chain
 from karaoke_buddy.core.library import Library, LibraryEntry, SavedOutput
-from karaoke_buddy.core.source_resolver import SourceResolver
+from karaoke_buddy.core.source_resolver import (
+    SourceResolver,
+    YouTubeRuntimeDependencyError,
+    is_youtube_url,
+    youtube_runtime_diagnostics,
+)
 from karaoke_buddy.ui.home_view import HomeView
 from karaoke_buddy.ui.playing_view import PlayingView
 
@@ -49,9 +54,31 @@ class _ResolveThread(QThread):
             self.finished.emit(result)
         except FileNotFoundError:
             self.error.emit("This file seems to have moved.")
+        except YouTubeRuntimeDependencyError as exc:
+            log.exception(
+                "YouTube runtime dependency failed input=%r runtime=%s",
+                self._input,
+                exc.runtime_context,
+            )
+            self.error.emit(
+                "YouTube setup problem: Deno or yt-dlp-ejs is missing, "
+                "incompatible, or could not run. Check the logs for the exact "
+                "runtime details."
+            )
         except Exception:  # noqa: BLE001
-            log.exception("Resolve failed")
-            self.error.emit("Couldn't download \u2014 check your internet.")
+            if is_youtube_url(self._input):
+                log.exception(
+                    "YouTube resolve failed input=%r runtime=%s",
+                    self._input,
+                    youtube_runtime_diagnostics(),
+                )
+                self.error.emit(
+                    "Couldn't download this YouTube video. yt-dlp failed; "
+                    "check the logs for the URL and runtime details."
+                )
+            else:
+                log.exception("Local source resolve failed input=%r", self._input)
+                self.error.emit("Couldn't open this file. Check the logs for details.")
 
 
 class MainWindow(QMainWindow):
@@ -142,7 +169,7 @@ class MainWindow(QMainWindow):
             entry = LibraryEntry(
                 title=resolved.title,
                 source_type=resolved.source_type,
-                source=resolved_posix if resolved.source_type == "local" else "",
+                source=resolved.source,
                 cached_path=resolved_posix,
                 thumbnail_path=str(resolved.thumbnail_path)
                 if resolved.thumbnail_path

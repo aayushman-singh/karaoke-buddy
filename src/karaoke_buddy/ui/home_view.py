@@ -18,7 +18,10 @@ from PySide6.QtWidgets import (
 )
 
 from karaoke_buddy.core.library import Library
-from karaoke_buddy.core.source_resolver import is_youtube_url
+from karaoke_buddy.core.source_resolver import (
+    is_youtube_url,
+    youtube_extraction_options,
+)
 from karaoke_buddy.ui.library_view import LibraryEntry, LibraryView
 
 log = logging.getLogger(__name__)
@@ -43,10 +46,11 @@ class _ClipMetaWorker(QThread):
         try:
             import yt_dlp  # noqa: PLC0415
 
-            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+            with yt_dlp.YoutubeDL(youtube_extraction_options()) as ydl:
                 info = ydl.extract_info(self._url, download=False)
             self.title_ready.emit(info.get("title") or self._url)
         except Exception:  # noqa: BLE001
+            log.exception("YouTube clipboard title fetch failed for %s", self._url)
             self.fetch_failed.emit()
 
 
