@@ -1,5 +1,13 @@
 # KaraokeBuddy
 
+![KaraokeBuddy demo](docs/demo/assets/readme-demo.gif)
+
+## Demo
+
+- Screenshot: [library](docs/demo/assets/home-library.png), [player controls](docs/demo/assets/playing-controls.png)
+- Loom plan: [30-second script](docs/demo/demo-script.md) and [recording notes](docs/demo/loom.md)
+- Run locally: `python -m karaoke_buddy`
+
 Sing along in your own vocal range. Open any karaoke video — from disk or a YouTube URL — and drag a **Song key** slider while the video plays. Pitch shifts live without changing tempo or drifting the on-screen lyrics. A **Silence the singer** slider optionally removes guide vocals. One button exports the current settings to a new MP4.
 
 **Target platform:** Windows 11  
