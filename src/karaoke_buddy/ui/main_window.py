@@ -140,7 +140,7 @@ class MainWindow(QMainWindow):
             entry = LibraryEntry(
                 title=resolved.title,
                 source_type=resolved.source_type,
-                source=resolved_posix if resolved.source_type == "local" else "",
+                source=resolved.source,
                 cached_path=resolved_posix,
                 thumbnail_path=str(resolved.thumbnail_path)
                 if resolved.thumbnail_path

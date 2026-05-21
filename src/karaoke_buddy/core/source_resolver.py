@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
+import deno
 import yt_dlp
 
 log = logging.getLogger(__name__)
@@ -32,6 +33,25 @@ class ResolvedSource:
     duration_seconds: int
     thumbnail_path: Optional[Path]
     source_type: str  # "local" | "youtube"
+    source: str
+
+
+def youtube_extraction_options(*, quiet: bool = True) -> dict:
+    """Return yt-dlp options required for full YouTube extraction."""
+    try:
+        deno_path = deno.find_deno_bin()
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("Deno JavaScript runtime is unavailable for yt-dlp") from exc
+
+    if not Path(deno_path).exists():
+        raise RuntimeError(f"Deno JavaScript runtime not found at {deno_path}")
+
+    return {
+        "quiet": quiet,
+        "no_warnings": True,
+        "noprogress": True,
+        "js_runtimes": {"deno": {"path": deno_path}},
+    }
 
 
 class SourceResolver:
@@ -73,6 +93,7 @@ class SourceResolver:
             duration_seconds=duration,
             thumbnail_path=thumb_path,
             source_type="local",
+            source=path.as_posix(),
         )
 
     def _resolve_url(
@@ -80,7 +101,7 @@ class SourceResolver:
         url: str,
         progress_callback: Optional[Callable[[int], None]] = None,
     ) -> "ResolvedSource":
-        ydl_opts_info: dict = {"quiet": True, "no_warnings": True}
+        ydl_opts_info = youtube_extraction_options()
 
         with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -105,12 +126,14 @@ class SourceResolver:
                 hooks = [_hook]
 
             ydl_opts_dl: dict = {
+                **youtube_extraction_options(),
                 "outtmpl": str(video_dir / "video.%(ext)s"),
                 "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
                 "merge_output_format": "mp4",
                 "progress_hooks": hooks,
-                "quiet": True,
             }
+            if self._ffmpeg != "ffmpeg":
+                ydl_opts_dl["ffmpeg_location"] = str(Path(self._ffmpeg).parent)
             with yt_dlp.YoutubeDL(ydl_opts_dl) as ydl:
                 ydl.download([url])
 
@@ -122,6 +145,7 @@ class SourceResolver:
             duration_seconds=duration,
             thumbnail_path=thumb_path,
             source_type="youtube",
+            source=url,
         )
 
     def _probe(self, path: Path) -> dict:
