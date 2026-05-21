@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
 from karaoke_buddy.core.exporter import ExportThread
 from karaoke_buddy.core.filter_chain import build_filter_chain
 from karaoke_buddy.core.library import Library, LibraryEntry, SavedOutput
-from karaoke_buddy.core.player import Player
 from karaoke_buddy.core.source_resolver import (
     SourceResolver,
     YouTubeRuntimeDependencyError,
@@ -27,6 +26,9 @@ from karaoke_buddy.core.source_resolver import (
 )
 from karaoke_buddy.ui.home_view import HomeView
 from karaoke_buddy.ui.playing_view import PlayingView
+
+if TYPE_CHECKING:
+    from karaoke_buddy.core.player import Player
 
 log = logging.getLogger(__name__)
 
@@ -113,7 +115,7 @@ class MainWindow(QMainWindow):
         self._playing = PlayingView()
         self._stack.addWidget(self._playing)
 
-        self._player: Optional[Player] = None
+        self._player: Optional["Player"] = None
 
         self._home.open_file_requested.connect(self._resolve_input)
         self._home.open_url_requested.connect(self._resolve_input)
@@ -199,6 +201,8 @@ class MainWindow(QMainWindow):
 
     def _load_player(self, path: Path) -> None:
         if self._player is None:
+            from karaoke_buddy.core.player import Player
+
             self._player = Player(self._playing.video_widget)
             self._player.playback_time_changed.connect(self._playing.update_time)
             self._player.duration_changed.connect(self._playing.update_duration)
