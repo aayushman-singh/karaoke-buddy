@@ -90,6 +90,32 @@ def test_setup_dll_search_path_adds_meipass_in_frozen_mode(monkeypatch, tmp_path
     assert str(meipass) in added
 
 
+def test_setup_dll_search_path_adds_exe_parent_in_frozen_mode(monkeypatch, tmp_path):
+    """In frozen --onedir mode, exe.parent is added to DLL search paths."""
+    exe_parent = tmp_path / "dist"
+    exe_parent.mkdir()
+
+    added: list[str] = []
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    try:
+        monkeypatch.delattr(sys, "_MEIPASS")
+    except AttributeError:
+        pass
+    monkeypatch.setattr(
+        sys, "executable", str(exe_parent / "KaraokeBuddy.exe"), raising=False
+    )
+    monkeypatch.setattr(
+        os, "add_dll_directory", lambda d: added.append(d), raising=False
+    )
+
+    from karaoke_buddy.__main__ import _setup_dll_search_path
+
+    _setup_dll_search_path()
+
+    assert str(exe_parent) in added
+
+
 def test_setup_dll_search_path_is_noop_in_dev_mode(monkeypatch):
     """In non-frozen dev mode, os.add_dll_directory is never called."""
     added: list[str] = []

@@ -67,6 +67,7 @@ class MainWindow(QMainWindow):
 
         self._library = library
         self._base_dir = base_dir
+        self._ffmpeg_exe = ffmpeg_exe
         self._current_entry: Optional[LibraryEntry] = None
         self._export_threads: list[ExportThread] = []
         self._resolve_thread: Optional[_ResolveThread] = None
@@ -225,7 +226,7 @@ class MainWindow(QMainWindow):
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(0)
 
-        thread = ExportThread(cached, chain, Path(output_path))
+        thread = ExportThread(cached, chain, Path(output_path), self._ffmpeg_exe)
         self._export_threads.append(thread)
 
         thread.progress.connect(progress.setValue)

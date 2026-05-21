@@ -58,9 +58,18 @@ def _setup_dll_search_path() -> None:
     """
     if not getattr(sys, "frozen", False):
         return
+    if not hasattr(os, "add_dll_directory"):
+        return
+
+    search_dirs: list[Path] = []
     meipass = getattr(sys, "_MEIPASS", None)
-    if meipass and hasattr(os, "add_dll_directory"):
-        os.add_dll_directory(meipass)
+    if meipass:
+        search_dirs.append(Path(meipass))
+    search_dirs.append(Path(sys.executable).parent)
+
+    for directory in search_dirs:
+        if directory.exists():
+            os.add_dll_directory(str(directory))
 
 
 def main() -> None:
@@ -83,12 +92,34 @@ def main() -> None:
 
     ffmpeg_exe = _locate_bundled("ffmpeg.exe")
     ffprobe_exe = _locate_bundled("ffprobe.exe")
+    libmpv_dll = _locate_bundled("libmpv-2.dll")
 
-    if getattr(sys, "frozen", False) and (ffmpeg_exe is None or ffprobe_exe is None):
+    from karaoke_buddy.core.dependency_preflight import (
+        RuntimeDependencyError,
+        preflight_runtime_dependencies,
+    )
+
+    try:
+        preflight_runtime_dependencies(
+            ffmpeg_exe=ffmpeg_exe,
+            ffprobe_exe=ffprobe_exe,
+            libmpv_dll=libmpv_dll,
+            frozen=bool(getattr(sys, "frozen", False)),
+        )
+    except RuntimeDependencyError as exc:
+        log.exception(
+            "Dependency preflight failed: base_dir=%s frozen=%s ffmpeg=%s "
+            "ffprobe=%s libmpv=%s",
+            base_dir,
+            bool(getattr(sys, "frozen", False)),
+            ffmpeg_exe,
+            ffprobe_exe,
+            libmpv_dll,
+        )
         QMessageBox.critical(
             None,
             "KaraokeBuddy",
-            "Installation is incomplete. Please re-download KaraokeBuddy.",
+            str(exc),
         )
         sys.exit(1)
 

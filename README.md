@@ -9,6 +9,15 @@ Sing along in your own vocal range. Open any karaoke video — from disk or a Yo
 
 ## Quick start (development)
 
+### Dependency preflight demo
+
+Run `python -m karaoke_buddy`.
+Before the main window opens, KaraokeBuddy now verifies FFmpeg, FFprobe, yt-dlp, and libmpv.
+If anything is missing, startup stops with a critical dialog and writes details to `logs/app.log`.
+In development, `ffmpeg` and `ffprobe` must be on PATH.
+In the packaged app, `ffmpeg.exe`, `ffprobe.exe`, and `libmpv-2.dll` must be bundled beside the exe or in the one-file extraction directory.
+This feature has no visual redesign, so there is no screenshot.
+
 ### Prerequisites
 
 - Python 3.11+
