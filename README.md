@@ -51,13 +51,24 @@ pytest tests/test_filter_chain.py tests/test_library.py tests/test_source_resolv
 python build/build.py
 ```
 
-The output is `dist/KaraokeBuddy.exe`. Copy it anywhere — it's fully self-contained.
+The output is `build/dist/KaraokeBuddy.exe`. Copy it anywhere — it's fully self-contained.
 
 If AV heuristics flag the single-file exe:
 
 ```bash
 python build/build.py --onedir
 ```
+
+## Packaged home verification
+
+Run the recruiter-facing exe verification:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build/verify_packaged_home.ps1
+```
+
+Exact result on 2026-05-21: `build/dist/KaraokeBuddy.exe` opened a visible
+`KaraokeBuddy` home window and captured [docs/packaged-home.png](docs/packaged-home.png).
 
 ---
 
