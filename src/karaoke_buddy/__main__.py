@@ -4,6 +4,7 @@ import logging
 import logging.handlers
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -63,6 +64,33 @@ def _setup_dll_search_path() -> None:
         os.add_dll_directory(meipass)
 
 
+def _run_smoke_check(base_dir: Path, duration_ms: int = 250) -> int:
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication
+
+    from karaoke_buddy.core.library import Library
+    from karaoke_buddy.ui.home_view import HomeView
+    from karaoke_buddy.ui.library_view import LibraryView
+    from karaoke_buddy.ui.main_window import MainWindow
+    from karaoke_buddy.ui.playing_view import PlayingView
+
+    ui_modules = (HomeView, LibraryView, MainWindow, PlayingView)
+    log = logging.getLogger(__name__)
+    log.info("Launch smoke check imported UI modules: %s", ui_modules)
+
+    app = QApplication.instance() or QApplication(sys.argv[:1])
+    app.setApplicationName("KaraokeBuddy Smoke Check")
+
+    with tempfile.TemporaryDirectory(prefix="karaoke-buddy-smoke-") as tmp:
+        window = MainWindow(
+            library=Library(Path(tmp) / "library.json"),
+            base_dir=base_dir,
+        )
+        window.show()
+        QTimer.singleShot(duration_ms, app.quit)
+        return int(app.exec())
+
+
 def main() -> None:
     if getattr(sys, "frozen", False):
         base_dir = Path(sys.executable).parent
@@ -75,6 +103,9 @@ def main() -> None:
 
     # Must happen before any import that pulls in python-mpv.
     _setup_dll_search_path()
+
+    if "--smoke-check" in sys.argv:
+        sys.exit(_run_smoke_check(base_dir))
 
     from PySide6.QtWidgets import QApplication, QMessageBox
 

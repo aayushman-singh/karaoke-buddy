@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-import mpv
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QWidget
 
@@ -23,6 +22,8 @@ class Player(QObject):
         self, render_widget: QWidget, parent: Optional[QObject] = None
     ) -> None:
         super().__init__(parent)
+        import mpv  # noqa: PLC0415
+
         self._widget = render_widget
         self._mpv = mpv.MPV(
             wid=str(int(render_widget.winId())),
