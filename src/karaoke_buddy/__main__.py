@@ -6,6 +6,8 @@ import os
 import sys
 from pathlib import Path
 
+_DLL_DIRECTORY_HANDLES: list[object] = []
+
 
 def _setup_logging(log_dir: Path) -> None:
     log_dir.mkdir(exist_ok=True)
@@ -69,7 +71,7 @@ def _setup_dll_search_path() -> None:
 
     for directory in search_dirs:
         if directory.exists():
-            os.add_dll_directory(str(directory))
+            _DLL_DIRECTORY_HANDLES.append(os.add_dll_directory(str(directory)))
 
 
 def main() -> None:

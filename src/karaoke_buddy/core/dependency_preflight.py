@@ -3,6 +3,7 @@
 import importlib
 import logging
 import shutil
+import subprocess
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -25,15 +26,25 @@ def preflight_runtime_dependencies(
     if frozen:
         if ffmpeg_exe is None:
             missing.append("ffmpeg.exe")
+        else:
+            missing.extend(_executable_problem("ffmpeg.exe", ffmpeg_exe))
         if ffprobe_exe is None:
             missing.append("ffprobe.exe")
+        else:
+            missing.extend(_executable_problem("ffprobe.exe", ffprobe_exe))
         if libmpv_dll is None:
             missing.append("libmpv-2.dll")
     else:
-        if shutil.which("ffmpeg") is None:
+        ffmpeg = shutil.which("ffmpeg")
+        ffprobe = shutil.which("ffprobe")
+        if ffmpeg is None:
             missing.append("ffmpeg on PATH")
-        if shutil.which("ffprobe") is None:
+        else:
+            missing.extend(_executable_problem("ffmpeg on PATH", ffmpeg))
+        if ffprobe is None:
             missing.append("ffprobe on PATH")
+        else:
+            missing.extend(_executable_problem("ffprobe on PATH", ffprobe))
 
     missing.extend(_import_problem("yt_dlp", "yt-dlp"))
     if not frozen or libmpv_dll is not None:
@@ -41,10 +52,48 @@ def preflight_runtime_dependencies(
 
     if missing:
         raise RuntimeDependencyError(
-            "Missing required media dependencies: "
+            "Required media dependencies are missing or unusable: "
             + ", ".join(missing)
             + ". Install FFmpeg, yt-dlp, and libmpv before starting KaraokeBuddy."
         )
+
+
+def _executable_problem(label: str, executable: str | Path) -> list[str]:
+    command = [str(executable), "-version"]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.exception(
+            "Dependency executable failed: label=%s executable=%s command=%s",
+            label,
+            executable,
+            command,
+        )
+        return [f"{label} could not be executed ({type(exc).__name__}: {exc})"]
+
+    if result.returncode != 0:
+        output = (result.stderr or result.stdout or "").strip()
+        detail = f"exit code {result.returncode}"
+        if output:
+            detail = f"{detail}: {output}"
+        log.error(
+            "Dependency executable returned non-zero: label=%s executable=%s "
+            "returncode=%s stdout=%r stderr=%r",
+            label,
+            executable,
+            result.returncode,
+            result.stdout,
+            result.stderr,
+        )
+        return [f"{label} could not be executed ({detail})"]
+
+    return []
 
 
 def _import_problem(module_name: str, label: str) -> list[str]:

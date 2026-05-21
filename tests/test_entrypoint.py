@@ -116,6 +116,34 @@ def test_setup_dll_search_path_adds_exe_parent_in_frozen_mode(monkeypatch, tmp_p
     assert str(exe_parent) in added
 
 
+def test_setup_dll_search_path_retains_handles(monkeypatch, tmp_path):
+    """DLL search path handles must stay alive for the process lifetime."""
+    meipass = tmp_path / "meipass"
+    meipass.mkdir()
+    exe_parent = tmp_path / "dist"
+    exe_parent.mkdir()
+
+    handles: list[object] = []
+
+    def _add_dll_directory(_directory: str) -> object:
+        handle = object()
+        handles.append(handle)
+        return handle
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
+    monkeypatch.setattr(
+        sys, "executable", str(exe_parent / "KaraokeBuddy.exe"), raising=False
+    )
+    monkeypatch.setattr(os, "add_dll_directory", _add_dll_directory, raising=False)
+
+    import karaoke_buddy.__main__ as entrypoint
+
+    entrypoint._setup_dll_search_path()
+
+    assert entrypoint._DLL_DIRECTORY_HANDLES[-2:] == handles
+
+
 def test_setup_dll_search_path_is_noop_in_dev_mode(monkeypatch):
     """In non-frozen dev mode, os.add_dll_directory is never called."""
     added: list[str] = []

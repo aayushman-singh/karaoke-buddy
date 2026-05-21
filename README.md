@@ -53,7 +53,7 @@ pytest tests/test_filter_chain.py tests/test_library.py tests/test_source_resolv
 
 ## Build the `.exe`
 
-1. Place `ffmpeg.exe` and `libmpv-2.dll` in `build/bin/`.
+1. Place `ffmpeg.exe`, `ffprobe.exe`, and `libmpv-2.dll` in `build/bin/`.
 2. Run:
 
 ```bash
