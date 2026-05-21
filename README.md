@@ -14,6 +14,9 @@ Screenshot:
 Sing along in your own vocal range. Open any karaoke video — from disk or a YouTube URL — and drag a **Song key** slider while the video plays. Pitch shifts live without changing tempo or drifting the on-screen lyrics. A **Silence the singer** slider optionally removes guide vocals. One button exports the current settings to a new MP4.
 
 **Target platform:** Windows 11  
+
+[Download KaraokeBuddy.exe for Windows](https://github.com/aayushman-singh/karaoke-buddy/releases/download/v0.1.0/KaraokeBuddy.exe)
+
 **Distribution:** Single double-clickable `.exe` — no installer, no admin rights, no external dependencies.
 
 ---
