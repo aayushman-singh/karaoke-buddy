@@ -111,6 +111,34 @@ def test_setup_dll_search_path_adds_meipass_in_frozen_mode(monkeypatch, tmp_path
     assert str(meipass) in added
 
 
+def test_setup_dll_search_path_adds_exe_parent_in_onedir_mode(monkeypatch, tmp_path):
+    """In frozen onedir mode, exe.parent is made available to DLL loaders."""
+    exe_parent = tmp_path / "dist"
+    exe_parent.mkdir()
+
+    added: list[str] = []
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    try:
+        monkeypatch.delattr(sys, "_MEIPASS")
+    except AttributeError:
+        pass
+    monkeypatch.setattr(
+        sys, "executable", str(exe_parent / "KaraokeBuddy.exe"), raising=False
+    )
+    monkeypatch.setattr(
+        os, "add_dll_directory", lambda d: added.append(d), raising=False
+    )
+    monkeypatch.setenv("PATH", "")
+
+    from karaoke_buddy.__main__ import _setup_dll_search_path
+
+    _setup_dll_search_path()
+
+    assert str(exe_parent) in added
+    assert str(exe_parent) in os.environ["PATH"].split(os.pathsep)
+
+
 def test_setup_dll_search_path_is_noop_in_dev_mode(monkeypatch):
     """In non-frozen dev mode, os.add_dll_directory is never called."""
     added: list[str] = []
@@ -125,3 +153,10 @@ def test_setup_dll_search_path_is_noop_in_dev_mode(monkeypatch):
     _setup_dll_search_path()
 
     assert added == []
+
+
+def test_main_window_import_does_not_require_mpv():
+    """The app shell can be imported before playback dependencies are present."""
+    from karaoke_buddy.ui.main_window import MainWindow
+
+    assert MainWindow.__name__ == "MainWindow"

@@ -31,6 +31,14 @@ def _setup_smoke_logging() -> None:
     logging.getLogger().setLevel(logging.INFO)
 
 
+def _log_unhandled_exception(
+    exc_type: type[BaseException], exc: BaseException, traceback: object
+) -> None:
+    logging.getLogger(__name__).critical(
+        "Unhandled exception during launch", exc_info=(exc_type, exc, traceback)
+    )
+
+
 def _locate_bundled(name: str) -> Path | None:
     """Find a binary bundled by PyInstaller.
 
@@ -76,6 +84,19 @@ def _missing_bundled_dependency_message(
     )
 
 
+def _runtime_binary_dirs() -> list[Path]:
+    """Directories that may contain runtime binaries in packaged builds."""
+    if not getattr(sys, "frozen", False):
+        return []
+
+    dirs: list[Path] = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        dirs.append(Path(meipass))
+    dirs.append(Path(sys.executable).parent)
+    return dirs
+
+
 def _setup_dll_search_path() -> None:
     """In frozen mode, add the PyInstaller extraction directory to the Windows
     DLL search path so that ``ctypes`` (used by python-mpv) can find
@@ -88,9 +109,19 @@ def _setup_dll_search_path() -> None:
     """
     if not getattr(sys, "frozen", False):
         return
-    meipass = getattr(sys, "_MEIPASS", None)
-    if meipass and hasattr(os, "add_dll_directory"):
-        os.add_dll_directory(meipass)
+    binary_dirs = [d for d in _runtime_binary_dirs() if d.exists()]
+    if not binary_dirs:
+        return
+
+    if hasattr(os, "add_dll_directory"):
+        for directory in binary_dirs:
+            os.add_dll_directory(str(directory))
+
+    current_path = os.environ.get("PATH", "")
+    existing = current_path.split(os.pathsep) if current_path else []
+    additions = [str(d) for d in binary_dirs if str(d) not in existing]
+    if additions:
+        os.environ["PATH"] = os.pathsep.join([*additions, *existing])
 
 
 def _run_smoke_check(
@@ -162,14 +193,17 @@ def main() -> None:
         _setup_smoke_logging()
     else:
         _setup_logging(base_dir / "logs")
+        sys.excepthook = _log_unhandled_exception
     log = logging.getLogger(__name__)
     log.info("KaraokeBuddy starting \u2014 base_dir=%s", base_dir)
 
     # Must happen before any import that pulls in python-mpv.
     _setup_dll_search_path()
+    log.info("Runtime binary path configured")
 
     ffmpeg_exe = _locate_bundled("ffmpeg.exe")
     ffprobe_exe = _locate_bundled("ffprobe.exe")
+    log.info("Bundled ffmpeg=%s ffprobe=%s", ffmpeg_exe, ffprobe_exe)
 
     dependency_error = _missing_bundled_dependency_message(ffmpeg_exe, ffprobe_exe)
     if smoke_check and dependency_error:
@@ -184,6 +218,7 @@ def main() -> None:
 
     app = QApplication(sys.argv)
     app.setApplicationName("KaraokeBuddy")
+    log.info("Qt application created")
 
     if dependency_error:
         QMessageBox.critical(
@@ -196,6 +231,7 @@ def main() -> None:
     from karaoke_buddy.core.library import Library
     from karaoke_buddy.ui.main_window import MainWindow
 
+    log.info("Creating main window")
     library = Library(base_dir / "library.json")
     window = MainWindow(
         library=library,
@@ -204,6 +240,7 @@ def main() -> None:
         ffprobe_exe=ffprobe_exe,
     )
     window.show()
+    log.info("Main window shown")
     sys.exit(app.exec())
 
 
