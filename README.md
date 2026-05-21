@@ -1,5 +1,16 @@
 # KaraokeBuddy
 
+## Reliable Launch
+
+Install once: `python -m pip install -e ".[dev]"`
+Run source: `python -m karaoke_buddy`
+Build package: place `ffmpeg.exe`, `ffprobe.exe`, and `libmpv-2.dll` in `build/bin/`, then run `python build/build.py`.
+Run package: `build/dist/KaraokeBuddy.exe`
+Smoke check: the main KaraokeBuddy window should appear before any song is opened.
+Logs: `logs/app.log`
+Screenshot:
+![Reliable launch smoke](docs/reliable-launch-smoke.png)
+
 Sing along in your own vocal range. Open any karaoke video — from disk or a YouTube URL — and drag a **Song key** slider while the video plays. Pitch shifts live without changing tempo or drifting the on-screen lyrics. A **Silence the singer** slider optionally removes guide vocals. One button exports the current settings to a new MP4.
 
 **Target platform:** Windows 11  
