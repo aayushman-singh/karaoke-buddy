@@ -6,6 +6,7 @@ import logging
 import re
 import subprocess
 from dataclasses import dataclass
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -19,6 +20,16 @@ _YT_PATTERNS = [
     re.compile(r"(?:https?://)?youtu\.be/[\w-]+"),
     re.compile(r"(?:https?://)?(?:www\.)?youtube\.com/shorts/[\w-]+"),
 ]
+
+_RUNTIME_WARNING_MARKERS = (
+    "javascript runtime",
+    "js runtime",
+    "[jsc",
+    "deno",
+    "yt-dlp-ejs",
+    "ejs",
+    "remote components challenge solver",
+)
 
 
 def is_youtube_url(s: str) -> bool:
@@ -36,19 +47,93 @@ class ResolvedSource:
     source: str
 
 
-def youtube_extraction_options(*, quiet: bool = True) -> dict:
-    """Return yt-dlp options required for full YouTube extraction."""
+class YouTubeRuntimeDependencyError(RuntimeError):
+    def __init__(self, message: str, runtime_context: dict[str, object]) -> None:
+        super().__init__(message)
+        self.runtime_context = runtime_context
+
+
+class _YtDlpLogger:
+    def __init__(self, runtime_context: dict[str, object]) -> None:
+        self._runtime_context = runtime_context
+
+    def debug(self, message: str) -> None:
+        log.debug("yt-dlp: %s", message)
+
+    def info(self, message: str) -> None:
+        log.info("yt-dlp: %s", message)
+
+    def warning(self, message: str) -> None:
+        log.warning("yt-dlp warning: %s", message)
+        if any(marker in message.lower() for marker in _RUNTIME_WARNING_MARKERS):
+            raise YouTubeRuntimeDependencyError(
+                f"yt-dlp reported a YouTube runtime dependency problem: {message}",
+                self._runtime_context,
+            )
+
+    def error(self, message: str) -> None:
+        log.error("yt-dlp error: %s", message)
+
+
+def youtube_runtime_diagnostics() -> dict[str, object]:
+    context: dict[str, object] = {}
+    for package_name in ("yt-dlp", "yt-dlp-ejs"):
+        try:
+            context[f"{package_name}_version"] = version(package_name)
+        except PackageNotFoundError:
+            context[f"{package_name}_version"] = "not installed"
+
     try:
         deno_path = deno.find_deno_bin()
     except Exception as exc:  # noqa: BLE001
-        raise RuntimeError("Deno JavaScript runtime is unavailable for yt-dlp") from exc
+        context["deno_error"] = repr(exc)
+        return context
 
-    if not Path(deno_path).exists():
-        raise RuntimeError(f"Deno JavaScript runtime not found at {deno_path}")
+    context["deno_path"] = str(deno_path)
+    context["deno_path_exists"] = Path(deno_path).exists()
+    return context
+
+
+def youtube_extraction_options(*, quiet: bool = True) -> dict:
+    """Return yt-dlp options required for full YouTube extraction."""
+    runtime_context = youtube_runtime_diagnostics()
+
+    if runtime_context.get("yt-dlp-ejs_version") == "not installed":
+        raise YouTubeRuntimeDependencyError(
+            "yt-dlp-ejs is not installed for YouTube challenge solving",
+            runtime_context,
+        )
+
+    if "deno_error" in runtime_context:
+        raise YouTubeRuntimeDependencyError(
+            "Deno JavaScript runtime is unavailable for yt-dlp",
+            runtime_context,
+        )
+
+    deno_path = runtime_context["deno_path"]
+    if not runtime_context["deno_path_exists"]:
+        raise YouTubeRuntimeDependencyError(
+            f"Deno JavaScript runtime not found at {deno_path}",
+            runtime_context,
+        )
+
+    try:
+        deno_version = subprocess.run(
+            [str(deno_path), "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()[0]
+    except Exception as exc:  # noqa: BLE001
+        raise YouTubeRuntimeDependencyError(
+            f"Deno JavaScript runtime could not be executed at {deno_path}",
+            runtime_context,
+        ) from exc
+    runtime_context["deno_version"] = deno_version
 
     return {
         "quiet": quiet,
-        "no_warnings": True,
+        "logger": _YtDlpLogger(runtime_context),
         "noprogress": True,
         "js_runtimes": {"deno": {"path": deno_path}},
     }
@@ -101,10 +186,25 @@ class SourceResolver:
         url: str,
         progress_callback: Optional[Callable[[int], None]] = None,
     ) -> "ResolvedSource":
-        ydl_opts_info = youtube_extraction_options()
+        try:
+            ydl_opts_info = youtube_extraction_options()
 
-        with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
-            info = ydl.extract_info(url, download=False)
+            with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
+                info = ydl.extract_info(url, download=False)
+        except YouTubeRuntimeDependencyError:
+            log.exception(
+                "YouTube runtime dependency failed for url=%r runtime=%s",
+                url,
+                youtube_runtime_diagnostics(),
+            )
+            raise
+        except Exception:
+            log.exception(
+                "YouTube metadata resolve failed for url=%r runtime=%s",
+                url,
+                youtube_runtime_diagnostics(),
+            )
+            raise
 
         video_id: str = info["id"]
         title: str = info.get("title", "Unknown")
@@ -134,8 +234,26 @@ class SourceResolver:
             }
             if self._ffmpeg != "ffmpeg":
                 ydl_opts_dl["ffmpeg_location"] = str(Path(self._ffmpeg).parent)
-            with yt_dlp.YoutubeDL(ydl_opts_dl) as ydl:
-                ydl.download([url])
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts_dl) as ydl:
+                    ydl.download([url])
+            except YouTubeRuntimeDependencyError:
+                log.exception(
+                    "YouTube runtime dependency failed during download for url=%r "
+                    "video_id=%s runtime=%s",
+                    url,
+                    video_id,
+                    youtube_runtime_diagnostics(),
+                )
+                raise
+            except Exception:
+                log.exception(
+                    "YouTube download failed for url=%r video_id=%s runtime=%s",
+                    url,
+                    video_id,
+                    youtube_runtime_diagnostics(),
+                )
+                raise
 
         thumb_path = self._ensure_thumbnail(video_path, video_dir / "thumb.jpg")
 

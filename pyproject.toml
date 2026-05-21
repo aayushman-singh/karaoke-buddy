@@ -10,7 +10,7 @@ dependencies = [
     "deno>=2.7.14",
     "PySide6>=6.6",
     "python-mpv>=1.0.6",
-    "yt-dlp>=2024.1.1",
+    "yt-dlp>=2025.11.12",
     "yt-dlp-ejs>=0.8.0",
 ]
 

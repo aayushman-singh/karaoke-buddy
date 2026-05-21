@@ -6,6 +6,7 @@ import pytest
 
 from karaoke_buddy.core.source_resolver import (
     SourceResolver,
+    YouTubeRuntimeDependencyError,
     is_youtube_url,
     youtube_extraction_options,
 )
@@ -42,7 +43,17 @@ def test_youtube_extraction_options_enable_deno_runtime():
     opts = youtube_extraction_options()
 
     assert opts["js_runtimes"]["deno"]["path"]
-    assert opts["no_warnings"] is True
+    assert "no_warnings" not in opts
+    assert opts["logger"]
+
+
+def test_youtube_runtime_warnings_fail_loud():
+    opts = youtube_extraction_options()
+
+    with pytest.raises(YouTubeRuntimeDependencyError):
+        opts["logger"].warning(
+            "[youtube] No supported JavaScript runtime could be found"
+        )
 
 
 def test_local_file_resolve_returns_resolved_source(tmp_path):
