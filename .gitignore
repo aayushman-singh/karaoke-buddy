@@ -1,8 +1,11 @@
 __pycache__/
 *.pyc
 .venv/
+.worktrees/
 dist/
 build/dist/
+build/bin/*.dll
+build/bin/*.exe
 build/work/
 *.spec
 cache/
