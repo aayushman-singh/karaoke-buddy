@@ -5,6 +5,7 @@ import logging.handlers
 import os
 import sys
 import tempfile
+import traceback
 from pathlib import Path
 
 
@@ -19,6 +20,13 @@ def _setup_logging(log_dir: Path) -> None:
     handler.setFormatter(
         logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
     )
+    logging.getLogger().addHandler(handler)
+    logging.getLogger().setLevel(logging.INFO)
+
+
+def _setup_smoke_logging() -> None:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
     logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.INFO)
 
@@ -47,6 +55,27 @@ def _locate_bundled(name: str) -> Path | None:
     return None
 
 
+def _missing_bundled_dependency_message(
+    ffmpeg_exe: Path | None, ffprobe_exe: Path | None
+) -> str | None:
+    if not getattr(sys, "frozen", False):
+        return None
+
+    missing = []
+    if ffmpeg_exe is None:
+        missing.append("ffmpeg.exe")
+    if ffprobe_exe is None:
+        missing.append("ffprobe.exe")
+
+    if not missing:
+        return None
+
+    return (
+        "Installation is incomplete. Please re-download KaraokeBuddy. "
+        f"Missing bundled dependencies: {', '.join(missing)}."
+    )
+
+
 def _setup_dll_search_path() -> None:
     """In frozen mode, add the PyInstaller extraction directory to the Windows
     DLL search path so that ``ctypes`` (used by python-mpv) can find
@@ -64,7 +93,12 @@ def _setup_dll_search_path() -> None:
         os.add_dll_directory(meipass)
 
 
-def _run_smoke_check(base_dir: Path, duration_ms: int = 250) -> int:
+def _run_smoke_check(
+    base_dir: Path,
+    ffmpeg_exe: Path | None,
+    ffprobe_exe: Path | None,
+    duration_ms: int = 250,
+) -> int:
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
 
@@ -80,15 +114,41 @@ def _run_smoke_check(base_dir: Path, duration_ms: int = 250) -> int:
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName("KaraokeBuddy Smoke Check")
+    uncaught_exceptions: list[str] = []
+    previous_excepthook = sys.excepthook
 
-    with tempfile.TemporaryDirectory(prefix="karaoke-buddy-smoke-") as tmp:
+    def smoke_excepthook(exc_type, exc_value, exc_tb) -> None:
+        formatted = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        uncaught_exceptions.append(formatted)
+        log.critical("Uncaught exception during launch smoke check:\n%s", formatted)
+        previous_excepthook(exc_type, exc_value, exc_tb)
+
+    sys.excepthook = smoke_excepthook
+    try:
         window = MainWindow(
-            library=Library(Path(tmp) / "library.json"),
+            library=Library(base_dir / "library.json"),
             base_dir=base_dir,
+            ffmpeg_exe=ffmpeg_exe,
+            ffprobe_exe=ffprobe_exe,
         )
         window.show()
+        if os.environ.get("KARAOKE_BUDDY_SMOKE_RAISE_UNCAUGHT"):
+            QTimer.singleShot(
+                0,
+                lambda: (_ for _ in ()).throw(
+                    RuntimeError("Injected launch smoke exception")
+                ),
+            )
         QTimer.singleShot(duration_ms, app.quit)
-        return int(app.exec())
+        exit_code = int(app.exec())
+        if uncaught_exceptions:
+            raise RuntimeError(
+                "Launch smoke check hit uncaught exception:\n"
+                + "\n".join(uncaught_exceptions)
+            )
+        return exit_code
+    finally:
+        sys.excepthook = previous_excepthook
 
 
 def main() -> None:
@@ -97,25 +157,35 @@ def main() -> None:
     else:
         base_dir = Path(__file__).parent.parent.parent
 
-    _setup_logging(base_dir / "logs")
+    smoke_check = "--smoke-check" in sys.argv
+    if smoke_check:
+        _setup_smoke_logging()
+    else:
+        _setup_logging(base_dir / "logs")
     log = logging.getLogger(__name__)
     log.info("KaraokeBuddy starting \u2014 base_dir=%s", base_dir)
 
     # Must happen before any import that pulls in python-mpv.
     _setup_dll_search_path()
 
-    if "--smoke-check" in sys.argv:
-        sys.exit(_run_smoke_check(base_dir))
+    ffmpeg_exe = _locate_bundled("ffmpeg.exe")
+    ffprobe_exe = _locate_bundled("ffprobe.exe")
+
+    dependency_error = _missing_bundled_dependency_message(ffmpeg_exe, ffprobe_exe)
+    if smoke_check and dependency_error:
+        log.critical(dependency_error)
+        sys.exit(1)
+
+    if smoke_check:
+        with tempfile.TemporaryDirectory(prefix="karaoke-buddy-smoke-") as tmp:
+            sys.exit(_run_smoke_check(Path(tmp), ffmpeg_exe, ffprobe_exe))
 
     from PySide6.QtWidgets import QApplication, QMessageBox
 
     app = QApplication(sys.argv)
     app.setApplicationName("KaraokeBuddy")
 
-    ffmpeg_exe = _locate_bundled("ffmpeg.exe")
-    ffprobe_exe = _locate_bundled("ffprobe.exe")
-
-    if getattr(sys, "frozen", False) and (ffmpeg_exe is None or ffprobe_exe is None):
+    if dependency_error:
         QMessageBox.critical(
             None,
             "KaraokeBuddy",
