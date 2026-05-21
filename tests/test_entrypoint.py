@@ -70,6 +70,27 @@ def test_locate_bundled_returns_none_when_file_absent(monkeypatch, tmp_path):
     assert _locate_bundled("libmpv-2.dll") is None
 
 
+def test_missing_bundled_dependency_message_names_missing_files(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    ffmpeg = tmp_path / "ffmpeg.exe"
+
+    from karaoke_buddy.__main__ import _missing_bundled_dependency_message
+
+    message = _missing_bundled_dependency_message(ffmpeg, None)
+
+    assert message is not None
+    assert "ffprobe.exe" in message
+    assert "ffmpeg.exe" not in message.split("Missing bundled dependencies: ", 1)[1]
+
+
+def test_missing_bundled_dependency_message_ignores_dev_mode(monkeypatch):
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+
+    from karaoke_buddy.__main__ import _missing_bundled_dependency_message
+
+    assert _missing_bundled_dependency_message(None, None) is None
+
+
 def test_setup_dll_search_path_adds_meipass_in_frozen_mode(monkeypatch, tmp_path):
     """In frozen mode with sys._MEIPASS, os.add_dll_directory is called."""
     meipass = tmp_path / "meipass"
