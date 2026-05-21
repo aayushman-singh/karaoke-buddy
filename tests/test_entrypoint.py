@@ -70,6 +70,27 @@ def test_locate_bundled_returns_none_when_file_absent(monkeypatch, tmp_path):
     assert _locate_bundled("libmpv-2.dll") is None
 
 
+def test_missing_bundled_dependency_message_names_missing_files(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    ffmpeg = tmp_path / "ffmpeg.exe"
+
+    from karaoke_buddy.__main__ import _missing_bundled_dependency_message
+
+    message = _missing_bundled_dependency_message(ffmpeg, None)
+
+    assert message is not None
+    assert "ffprobe.exe" in message
+    assert "ffmpeg.exe" not in message.split("Missing bundled dependencies: ", 1)[1]
+
+
+def test_missing_bundled_dependency_message_ignores_dev_mode(monkeypatch):
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+
+    from karaoke_buddy.__main__ import _missing_bundled_dependency_message
+
+    assert _missing_bundled_dependency_message(None, None) is None
+
+
 def test_setup_dll_search_path_adds_meipass_in_frozen_mode(monkeypatch, tmp_path):
     """In frozen mode with sys._MEIPASS, os.add_dll_directory is called."""
     meipass = tmp_path / "meipass"
@@ -90,8 +111,8 @@ def test_setup_dll_search_path_adds_meipass_in_frozen_mode(monkeypatch, tmp_path
     assert str(meipass) in added
 
 
-def test_setup_dll_search_path_adds_exe_parent_in_frozen_mode(monkeypatch, tmp_path):
-    """In frozen --onedir mode, exe.parent is added to DLL search paths."""
+def test_setup_dll_search_path_adds_exe_parent_in_onedir_mode(monkeypatch, tmp_path):
+    """In frozen onedir mode, exe.parent is made available to DLL loaders."""
     exe_parent = tmp_path / "dist"
     exe_parent.mkdir()
 
@@ -108,12 +129,14 @@ def test_setup_dll_search_path_adds_exe_parent_in_frozen_mode(monkeypatch, tmp_p
     monkeypatch.setattr(
         os, "add_dll_directory", lambda d: added.append(d), raising=False
     )
+    monkeypatch.setenv("PATH", "")
 
     from karaoke_buddy.__main__ import _setup_dll_search_path
 
     _setup_dll_search_path()
 
     assert str(exe_parent) in added
+    assert str(exe_parent) in os.environ["PATH"].split(os.pathsep)
 
 
 def test_setup_dll_search_path_retains_handles(monkeypatch, tmp_path):
@@ -158,3 +181,10 @@ def test_setup_dll_search_path_is_noop_in_dev_mode(monkeypatch):
     _setup_dll_search_path()
 
     assert added == []
+
+
+def test_main_window_import_does_not_require_mpv():
+    """The app shell can be imported before playback dependencies are present."""
+    from karaoke_buddy.ui.main_window import MainWindow
+
+    assert MainWindow.__name__ == "MainWindow"
