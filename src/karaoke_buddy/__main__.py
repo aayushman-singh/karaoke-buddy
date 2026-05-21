@@ -8,6 +8,8 @@ import tempfile
 import traceback
 from pathlib import Path
 
+_DLL_DIRECTORY_HANDLES: list[object] = []
+
 
 def _setup_logging(log_dir: Path) -> None:
     log_dir.mkdir(exist_ok=True)
@@ -115,7 +117,7 @@ def _setup_dll_search_path() -> None:
 
     if hasattr(os, "add_dll_directory"):
         for directory in binary_dirs:
-            os.add_dll_directory(str(directory))
+            _DLL_DIRECTORY_HANDLES.append(os.add_dll_directory(str(directory)))
 
     current_path = os.environ.get("PATH", "")
     existing = current_path.split(os.pathsep) if current_path else []
@@ -203,30 +205,57 @@ def main() -> None:
 
     ffmpeg_exe = _locate_bundled("ffmpeg.exe")
     ffprobe_exe = _locate_bundled("ffprobe.exe")
-    log.info("Bundled ffmpeg=%s ffprobe=%s", ffmpeg_exe, ffprobe_exe)
-
-    dependency_error = _missing_bundled_dependency_message(ffmpeg_exe, ffprobe_exe)
-    if smoke_check and dependency_error:
-        log.critical(dependency_error)
-        sys.exit(1)
+    libmpv_dll = _locate_bundled("libmpv-2.dll")
+    log.info(
+        "Bundled ffmpeg=%s ffprobe=%s libmpv=%s",
+        ffmpeg_exe,
+        ffprobe_exe,
+        libmpv_dll,
+    )
 
     if smoke_check:
         with tempfile.TemporaryDirectory(prefix="karaoke-buddy-smoke-") as tmp:
             sys.exit(_run_smoke_check(Path(tmp), ffmpeg_exe, ffprobe_exe))
 
-    from PySide6.QtWidgets import QApplication, QMessageBox
+    from karaoke_buddy.core.dependency_preflight import (
+        RuntimeDependencyError,
+        preflight_runtime_dependencies,
+    )
+
+    try:
+        preflight_runtime_dependencies(
+            ffmpeg_exe=ffmpeg_exe,
+            ffprobe_exe=ffprobe_exe,
+            libmpv_dll=libmpv_dll,
+            frozen=bool(getattr(sys, "frozen", False)),
+        )
+    except RuntimeDependencyError as exc:
+        log.exception(
+            "Dependency preflight failed: base_dir=%s frozen=%s ffmpeg=%s "
+            "ffprobe=%s libmpv=%s",
+            base_dir,
+            bool(getattr(sys, "frozen", False)),
+            ffmpeg_exe,
+            ffprobe_exe,
+            libmpv_dll,
+        )
+        from PySide6.QtWidgets import QApplication, QMessageBox
+
+        error_app = QApplication(sys.argv)
+        error_app.setApplicationName("KaraokeBuddy")
+        log.info("Qt application created")
+        QMessageBox.critical(
+            None,
+            "KaraokeBuddy",
+            str(exc),
+        )
+        sys.exit(1)
+
+    from PySide6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
     app.setApplicationName("KaraokeBuddy")
     log.info("Qt application created")
-
-    if dependency_error:
-        QMessageBox.critical(
-            None,
-            "KaraokeBuddy",
-            "Installation is incomplete. Please re-download KaraokeBuddy.",
-        )
-        sys.exit(1)
 
     from karaoke_buddy.core.library import Library
     from karaoke_buddy.ui.main_window import MainWindow
