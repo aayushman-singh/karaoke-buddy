@@ -4,7 +4,7 @@
 
 ## Demo
 
-- Screenshot: [library](docs/demo/assets/home-library.png), [player controls](docs/demo/assets/playing-controls.png)
+- Generated demo previews: [library](docs/demo/assets/home-library.png), [player controls](docs/demo/assets/playing-controls.png)
 - Loom plan: [30-second script](docs/demo/demo-script.md) and [recording notes](docs/demo/loom.md)
 - Run locally: `python -m karaoke_buddy`
 

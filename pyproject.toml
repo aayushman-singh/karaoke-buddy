@@ -17,6 +17,7 @@ dev = [
     "pytest>=8.0",
     "pytest-qt>=4.4",
     "hypothesis>=6.0",
+    "Pillow>=10.0",
     "pyinstaller>=6.0",
     "ruff>=0.4",
 ]

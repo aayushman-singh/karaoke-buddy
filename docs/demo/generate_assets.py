@@ -2,13 +2,28 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "docs" / "demo" / "assets"
-FONT_DIR = Path("C:/Windows/Fonts")
+
+
+def _windows_font_dir() -> Path:
+    windir = os.environ.get("WINDIR")
+    if not windir:
+        raise RuntimeError("WINDIR is required to locate Windows fonts.")
+
+    font_dir = Path(windir) / "Fonts"
+    if not font_dir.is_dir():
+        raise RuntimeError(f"Windows font directory not found: {font_dir}")
+
+    return font_dir
+
+
+FONT_DIR = _windows_font_dir()
 
 
 def _font(name: str, size: int) -> ImageFont.FreeTypeFont:
