@@ -1,4 +1,4 @@
-"""Integration tests for Exporter — runs real FFmpeg on a synthetic clip."""
+"""Integration tests for Exporter - runs real FFmpeg on a synthetic clip."""
 
 import json
 import shutil
@@ -12,7 +12,7 @@ from karaoke_buddy.core.filter_chain import build_filter_chain
 
 pytestmark = pytest.mark.skipif(
     shutil.which("ffmpeg") is None,
-    reason="ffmpeg not found on PATH — integration tests require a real FFmpeg binary",
+    reason="ffmpeg not found on PATH; integration tests require a real FFmpeg binary",
 )
 
 

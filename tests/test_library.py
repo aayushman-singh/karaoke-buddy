@@ -98,6 +98,20 @@ def test_saved_outputs_survive_round_trip(tmp_path):
     assert reloaded.saved_outputs[0].pitch == -3
 
 
+def test_find_by_source_matches_original_source(lib):
+    entry = make_entry(source="C:/Videos/song.mp4")
+    lib.upsert(entry)
+
+    assert lib.find_by_source("C:/Videos/song.mp4") == entry
+
+
+def test_find_by_source_matches_cached_path(lib):
+    entry = make_entry(cached_path="cache/youtube-id/video.mp4")
+    lib.upsert(entry)
+
+    assert lib.find_by_source("cache/youtube-id/video.mp4") == entry
+
+
 def test_touch_updates_last_opened_and_settings(lib):
     entry = make_entry(last_opened="2026-01-01T00:00:00+00:00")
     lib.upsert(entry)

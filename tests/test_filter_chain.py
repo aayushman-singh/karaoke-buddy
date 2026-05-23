@@ -7,7 +7,17 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from karaoke_buddy.core.filter_chain import build_filter_chain
+from karaoke_buddy.core.filter_chain import build_filter_chain, build_mpv_filter_chain
+
+
+def test_mpv_zero_pitch_has_unity_pitch_scale():
+    chain = build_mpv_filter_chain(0)
+    assert chain == "rubberband=pitch-scale=1.000000"
+
+
+def test_mpv_three_semitones_up():
+    chain = build_mpv_filter_chain(3)
+    assert chain == "rubberband=pitch-scale=1.189207"
 
 
 def test_zero_pitch_zero_vocal_has_unity_pitch():
