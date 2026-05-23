@@ -26,7 +26,7 @@ KaraokeBuddy replaces a fiddly manual workflow - downloading a karaoke track, sh
 
 ## Download
 
-**Windows:** download [KaraokeBuddy.exe v0.1.0](https://github.com/aayushman-singh/karaoke-buddy/releases/download/v0.1.0/KaraokeBuddy.exe), then double-click it.
+**Windows:** download [KaraokeBuddy.exe v0.2.0](https://github.com/aayushman-singh/karaoke-buddy/releases/download/v0.2.0/KaraokeBuddy.exe), then double-click it.
 
 The Windows release is a portable build: no installer, no admin rights, and no separate Python, FFmpeg, or mpv install.
 

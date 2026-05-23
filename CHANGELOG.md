@@ -6,6 +6,8 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-23
+
 ### Fixed
 - CI now installs the project package with its development dependencies before
   running tests, so the tested import surface matches a real checkout.
@@ -34,6 +36,9 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `.pre-commit-config.yaml` - ruff + whitespace/EOF/yaml/toml checks on every commit.
 - `justfile` for one-command workflows (`just install`, `just test`, `just build`,
   `just smoke`, `just fmt`, `just hooks`, etc.).
+- Windows release workflow that builds and attaches `KaraokeBuddy.exe` when a
+  `v*` tag is pushed, with manual dispatch for rebuilding an existing tag.
+- `CODE_OF_CONDUCT.md` using Contributor Covenant 2.1.
 
 ## [0.1.0] - 2026-04-17
 
@@ -53,5 +58,6 @@ Initial public release.
 - Launch smoke check: `python -m karaoke_buddy --smoke-check` boots the Qt
   window briefly to catch UI import or startup regressions in CI.
 
-[Unreleased]: https://github.com/aayushman-singh/karaoke-buddy/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/aayushman-singh/karaoke-buddy/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/aayushman-singh/karaoke-buddy/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/aayushman-singh/karaoke-buddy/releases/tag/v0.1.0

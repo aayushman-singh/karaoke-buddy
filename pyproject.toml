@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "karaoke-buddy"
-version = "0.1.0"
+version = "0.2.0"
 description = "Sing any karaoke video in your own key - live pitch shift, vocal reduction, and one-click MP4 export."
 readme = "README.md"
 requires-python = ">=3.11"
