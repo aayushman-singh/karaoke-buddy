@@ -1,4 +1,3 @@
-from pathlib import Path
 import subprocess
 from unittest.mock import patch
 
@@ -11,17 +10,19 @@ from karaoke_buddy.core.dependency_preflight import (
 
 
 def test_preflight_reports_missing_bundled_files() -> None:
-    with pytest.raises(RuntimeDependencyError) as exc_info:
-        preflight_runtime_dependencies(
-            ffmpeg_exe=None,
-            ffprobe_exe=Path("ffprobe.exe"),
-            libmpv_dll=None,
-            frozen=True,
-        )
+    with patch("karaoke_buddy.core.dependency_preflight.locate_bundled", return_value=None):
+        with pytest.raises(RuntimeDependencyError) as exc_info:
+            preflight_runtime_dependencies(
+                ffmpeg_exe=None,
+                libmpv_dll=None,
+                frozen=True,
+            )
 
     message = str(exc_info.value)
     assert "ffmpeg.exe" in message
+    assert "ffprobe.exe" in message
     assert "libmpv-2.dll" in message
+    assert "deno.exe" in message
 
 
 def test_preflight_reports_missing_dev_path_tools() -> None:
@@ -29,7 +30,6 @@ def test_preflight_reports_missing_dev_path_tools() -> None:
         with pytest.raises(RuntimeDependencyError) as exc_info:
             preflight_runtime_dependencies(
                 ffmpeg_exe=None,
-                ffprobe_exe=None,
                 libmpv_dll=None,
                 frozen=False,
             )
@@ -50,7 +50,6 @@ def test_preflight_reports_unloadable_python_dependency() -> None:
             with pytest.raises(RuntimeDependencyError) as exc_info:
                 preflight_runtime_dependencies(
                     ffmpeg_exe=None,
-                    ffprobe_exe=None,
                     libmpv_dll=None,
                     frozen=False,
                 )
@@ -61,10 +60,8 @@ def test_preflight_reports_unloadable_python_dependency() -> None:
 
 def test_preflight_reports_non_runnable_bundled_ffmpeg(tmp_path) -> None:
     ffmpeg = tmp_path / "ffmpeg.exe"
-    ffprobe = tmp_path / "ffprobe.exe"
     libmpv = tmp_path / "libmpv-2.dll"
     ffmpeg.write_bytes(b"")
-    ffprobe.write_bytes(b"")
     libmpv.write_bytes(b"")
 
     def _run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -82,7 +79,6 @@ def test_preflight_reports_non_runnable_bundled_ffmpeg(tmp_path) -> None:
             with pytest.raises(RuntimeDependencyError) as exc_info:
                 preflight_runtime_dependencies(
                     ffmpeg_exe=ffmpeg,
-                    ffprobe_exe=ffprobe,
                     libmpv_dll=libmpv,
                     frozen=True,
                 )
@@ -108,7 +104,6 @@ def test_preflight_reports_non_runnable_dev_ffprobe() -> None:
                 with pytest.raises(RuntimeDependencyError) as exc_info:
                     preflight_runtime_dependencies(
                         ffmpeg_exe=None,
-                        ffprobe_exe=None,
                         libmpv_dll=None,
                         frozen=False,
                     )
@@ -130,9 +125,8 @@ def test_preflight_passes_when_runtime_is_available() -> None:
             with patch("importlib.import_module", return_value=object()) as import_module:
                 preflight_runtime_dependencies(
                     ffmpeg_exe=None,
-                    ffprobe_exe=None,
                     libmpv_dll=None,
                     frozen=False,
                 )
 
-    assert import_module.call_count == 2
+    assert import_module.call_count == 3

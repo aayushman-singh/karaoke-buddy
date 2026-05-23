@@ -4,14 +4,19 @@ import hashlib
 import json
 import logging
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Callable, Optional
 
-import deno
 import yt_dlp
+
+from karaoke_buddy.core.runtime_paths import (
+    resolve_deno_executable,
+    resolve_ffprobe_executable,
+)
 
 log = logging.getLogger(__name__)
 
@@ -84,7 +89,7 @@ def youtube_runtime_diagnostics() -> dict[str, object]:
             context[f"{package_name}_version"] = "not installed"
 
     try:
-        deno_path = deno.find_deno_bin()
+        deno_path = resolve_deno_executable()
     except Exception as exc:  # noqa: BLE001
         context["deno_error"] = repr(exc)
         return context
@@ -135,6 +140,7 @@ def youtube_extraction_options(*, quiet: bool = True) -> dict:
         "quiet": quiet,
         "logger": _YtDlpLogger(runtime_context),
         "noprogress": True,
+        "noplaylist": True,
         "js_runtimes": {"deno": {"path": deno_path}},
     }
 
@@ -149,8 +155,17 @@ class SourceResolver:
         ffprobe_exe: Optional[Path] = None,
     ) -> None:
         self._cache_dir = cache_dir
-        self._ffmpeg = str(ffmpeg_exe) if ffmpeg_exe else "ffmpeg"
-        self._ffprobe = str(ffprobe_exe) if ffprobe_exe else "ffprobe"
+        resolved_ffmpeg = self._resolve_ffmpeg(ffmpeg_exe)
+        self._ffmpeg = str(resolved_ffmpeg) if resolved_ffmpeg else "ffmpeg"
+        self._ffmpeg_dir = str(resolved_ffmpeg.parent) if resolved_ffmpeg else None
+        self._ffprobe = str(ffprobe_exe) if ffprobe_exe else resolve_ffprobe_executable(ffmpeg_exe)
+
+    @staticmethod
+    def _resolve_ffmpeg(ffmpeg_exe: Optional[Path]) -> Optional[Path]:
+        if ffmpeg_exe:
+            return ffmpeg_exe
+        which = shutil.which("ffmpeg")
+        return Path(which) if which else None
 
     def resolve(
         self,
@@ -166,8 +181,7 @@ class SourceResolver:
         if not path.exists():
             raise FileNotFoundError(f"File not found: {path}")
 
-        probe = self._probe(path)
-        duration = int(float(probe.get("format", {}).get("duration", 0)))
+        duration = self._probe_duration_seconds(path)
 
         cache_dir = self._local_cache_dir(path)
         thumb_path = self._ensure_thumbnail(path, cache_dir / "thumb.jpg")
@@ -232,8 +246,8 @@ class SourceResolver:
                 "merge_output_format": "mp4",
                 "progress_hooks": hooks,
             }
-            if self._ffmpeg != "ffmpeg":
-                ydl_opts_dl["ffmpeg_location"] = str(Path(self._ffmpeg).parent)
+            if self._ffmpeg_dir:
+                ydl_opts_dl["ffmpeg_location"] = self._ffmpeg_dir
             try:
                 with yt_dlp.YoutubeDL(ydl_opts_dl) as ydl:
                     ydl.download([url])
@@ -266,22 +280,54 @@ class SourceResolver:
             source=url,
         )
 
-    def _probe(self, path: Path) -> dict:
-        result = subprocess.run(
-            [
-                self._ffprobe,
-                "-v",
-                "quiet",
-                "-print_format",
-                "json",
-                "-show_format",
-                str(path),
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return json.loads(result.stdout)
+    def _probe_duration_seconds(self, path: Path) -> int:
+        """Read duration via ffprobe JSON. Raises on failure (no silent fallback)."""
+        command = [
+            self._ffprobe,
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            str(path),
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+            )
+        except subprocess.CalledProcessError as exc:
+            log.error(
+                "ffprobe failed: path=%s returncode=%s stdout=%r stderr=%r",
+                path,
+                exc.returncode,
+                exc.stdout,
+                exc.stderr,
+            )
+            raise
+        except (OSError, subprocess.TimeoutExpired):
+            log.exception("ffprobe could not be invoked: path=%s ffprobe=%s", path, self._ffprobe)
+            raise
+
+        try:
+            data = json.loads(result.stdout)
+            duration = float(data["format"]["duration"])
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            log.error(
+                "ffprobe returned unparseable duration: path=%s stdout=%r error=%r",
+                path,
+                result.stdout,
+                exc,
+            )
+            raise RuntimeError(
+                f"Could not read duration of {path.name}: ffprobe output unparseable"
+            ) from exc
+
+        return int(duration)
 
     def _extract_thumbnail(self, video: Path, out: Path) -> None:
         subprocess.run(

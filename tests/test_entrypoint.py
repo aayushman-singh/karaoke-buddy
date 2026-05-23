@@ -1,4 +1,4 @@
-"""Tests for __main__ entry point helpers — DLL discovery and path setup."""
+"""Tests for __main__ entry point helpers - DLL discovery and path setup."""
 
 import os
 import sys
@@ -7,9 +7,9 @@ import sys
 def test_locate_bundled_returns_none_in_dev_mode(monkeypatch):
     """In non-frozen dev mode, _locate_bundled always returns None."""
     monkeypatch.setattr(sys, "frozen", False, raising=False)
-    from karaoke_buddy.__main__ import _locate_bundled
+    from karaoke_buddy.core.runtime_paths import locate_bundled
 
-    assert _locate_bundled("ffmpeg.exe") is None
+    assert locate_bundled("ffmpeg.exe") is None
 
 
 def test_locate_bundled_finds_dll_in_meipass(monkeypatch, tmp_path):
@@ -21,12 +21,12 @@ def test_locate_bundled_finds_dll_in_meipass(monkeypatch, tmp_path):
 
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
-    # exe.parent does NOT contain the DLL — we want _MEIPASS to win
+    # exe.parent does NOT contain the DLL; we want _MEIPASS to win.
     monkeypatch.setattr(sys, "executable", str(tmp_path / "KaraokeBuddy.exe"), raising=False)
 
-    from karaoke_buddy.__main__ import _locate_bundled
+    from karaoke_buddy.core.runtime_paths import locate_bundled
 
-    result = _locate_bundled("libmpv-2.dll")
+    result = locate_bundled("libmpv-2.dll")
     assert result == dll
 
 
@@ -44,9 +44,9 @@ def test_locate_bundled_falls_back_to_exe_parent_if_no_meipass(monkeypatch, tmp_
         pass
     monkeypatch.setattr(sys, "executable", str(exe_parent / "KaraokeBuddy.exe"), raising=False)
 
-    from karaoke_buddy.__main__ import _locate_bundled
+    from karaoke_buddy.core.runtime_paths import locate_bundled
 
-    result = _locate_bundled("libmpv-2.dll")
+    result = locate_bundled("libmpv-2.dll")
     assert result == dll
 
 
@@ -59,22 +59,22 @@ def test_locate_bundled_returns_none_when_file_absent(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
     monkeypatch.setattr(sys, "executable", str(tmp_path / "KaraokeBuddy.exe"), raising=False)
 
-    from karaoke_buddy.__main__ import _locate_bundled
+    from karaoke_buddy.core.runtime_paths import locate_bundled
 
-    assert _locate_bundled("libmpv-2.dll") is None
+    assert locate_bundled("libmpv-2.dll") is None
 
 
-def test_missing_bundled_dependency_message_names_missing_files(monkeypatch, tmp_path):
+def test_missing_bundled_dependency_message_names_missing_files(monkeypatch) -> None:
     monkeypatch.setattr(sys, "frozen", True, raising=False)
-    ffmpeg = tmp_path / "ffmpeg.exe"
+    monkeypatch.setattr("karaoke_buddy.__main__.locate_bundled", lambda _name: None, raising=False)
 
     from karaoke_buddy.__main__ import _missing_bundled_dependency_message
 
-    message = _missing_bundled_dependency_message(ffmpeg, None)
+    message = _missing_bundled_dependency_message(None)
 
     assert message is not None
+    assert "ffmpeg.exe" in message
     assert "ffprobe.exe" in message
-    assert "ffmpeg.exe" not in message.split("Missing bundled dependencies: ", 1)[1]
 
 
 def test_missing_bundled_dependency_message_ignores_dev_mode(monkeypatch):
@@ -82,7 +82,7 @@ def test_missing_bundled_dependency_message_ignores_dev_mode(monkeypatch):
 
     from karaoke_buddy.__main__ import _missing_bundled_dependency_message
 
-    assert _missing_bundled_dependency_message(None, None) is None
+    assert _missing_bundled_dependency_message(None) is None
 
 
 def test_setup_dll_search_path_adds_meipass_in_frozen_mode(monkeypatch, tmp_path):

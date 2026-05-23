@@ -61,7 +61,7 @@ def test_local_file_resolve_returns_resolved_source(tmp_path):
 
     resolver = SourceResolver(cache_dir=tmp_path / "cache")
 
-    with patch.object(resolver, "_probe", return_value={"format": {"duration": "180.5"}}):
+    with patch.object(resolver, "_probe_duration_seconds", return_value=180):
         with patch.object(resolver, "_extract_thumbnail"):
             result = resolver.resolve(str(fake_mp4))
 
@@ -76,11 +76,71 @@ def test_local_file_title_is_stem(tmp_path):
     fake_mp4.write_bytes(b"\x00")
 
     resolver = SourceResolver(cache_dir=tmp_path / "cache")
-    with patch.object(resolver, "_probe", return_value={"format": {"duration": "0"}}):
+    with patch.object(resolver, "_probe_duration_seconds", return_value=0):
         with patch.object(resolver, "_extract_thumbnail"):
             result = resolver.resolve(str(fake_mp4))
 
     assert result.title == "Hotel California"
+
+
+def test_probe_duration_parses_ffprobe_json(tmp_path) -> None:
+    resolver = SourceResolver(cache_dir=tmp_path / "cache")
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"\x00")
+
+    stdout = '{"format": {"duration": "185.50"}}'
+    with patch(
+        "subprocess.run",
+        return_value=subprocess.CompletedProcess(
+            ["ffprobe"], returncode=0, stdout=stdout, stderr=""
+        ),
+    ):
+        assert resolver._probe_duration_seconds(video) == 185
+
+
+def test_probe_duration_raises_on_ffprobe_failure(tmp_path) -> None:
+    resolver = SourceResolver(cache_dir=tmp_path / "cache")
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"\x00")
+
+    with patch(
+        "subprocess.run",
+        side_effect=subprocess.CalledProcessError(
+            returncode=1, cmd=["ffprobe"], stderr="moov atom not found"
+        ),
+    ):
+        with pytest.raises(subprocess.CalledProcessError):
+            resolver._probe_duration_seconds(video)
+
+
+def test_probe_duration_raises_on_unparseable_output(tmp_path) -> None:
+    resolver = SourceResolver(cache_dir=tmp_path / "cache")
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"\x00")
+
+    with patch(
+        "subprocess.run",
+        return_value=subprocess.CompletedProcess(
+            ["ffprobe"], returncode=0, stdout="not json", stderr=""
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="unparseable"):
+            resolver._probe_duration_seconds(video)
+
+
+def test_probe_duration_raises_when_format_missing(tmp_path) -> None:
+    resolver = SourceResolver(cache_dir=tmp_path / "cache")
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"\x00")
+
+    with patch(
+        "subprocess.run",
+        return_value=subprocess.CompletedProcess(
+            ["ffprobe"], returncode=0, stdout='{"streams": []}', stderr=""
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="unparseable"):
+            resolver._probe_duration_seconds(video)
 
 
 def test_thumbnail_generation_failure_raises(tmp_path, caplog) -> None:
@@ -125,7 +185,7 @@ def test_cache_hit_skips_yt_dlp_download(tmp_path):
     with patch("yt_dlp.YoutubeDL") as MockYDL:
         instance = MockYDL.return_value.__enter__.return_value
         instance.extract_info.return_value = fake_info
-        with patch.object(resolver, "_probe", return_value={"format": {"duration": "213"}}):
+        with patch.object(resolver, "_probe_duration_seconds", return_value=213):
             with patch.object(resolver, "_extract_thumbnail"):
                 result = resolver.resolve(f"https://www.youtube.com/watch?v={video_id}")
 

@@ -8,6 +8,8 @@ import tempfile
 import traceback
 from pathlib import Path
 
+from karaoke_buddy.core.runtime_paths import locate_bundled, runtime_binary_dirs
+
 _DLL_DIRECTORY_HANDLES: list[object] = []
 
 
@@ -39,40 +41,14 @@ def _log_unhandled_exception(
     )
 
 
-def _locate_bundled(name: str) -> Path | None:
-    """Find a binary bundled by PyInstaller.
-
-    Checks ``sys._MEIPASS`` first (populated in ``--onefile`` mode when the
-    archive is extracted to a temp directory), then falls back to the directory
-    that contains the executable (correct for ``--onedir`` mode).
-
-    Returns ``None`` in development (non-frozen) mode, or if the file does not
-    exist in any candidate location.
-    """
-    if not getattr(sys, "frozen", False):
-        return None
-    search_dirs: list[Path] = []
-    meipass = getattr(sys, "_MEIPASS", None)
-    if meipass:
-        search_dirs.append(Path(meipass))
-    search_dirs.append(Path(sys.executable).parent)
-    for d in search_dirs:
-        candidate = d / name
-        if candidate.exists():
-            return candidate
-    return None
-
-
-def _missing_bundled_dependency_message(
-    ffmpeg_exe: Path | None, ffprobe_exe: Path | None
-) -> str | None:
+def _missing_bundled_dependency_message(ffmpeg_exe: Path | None) -> str | None:
     if not getattr(sys, "frozen", False):
         return None
 
-    missing = []
+    missing: list[str] = []
     if ffmpeg_exe is None:
         missing.append("ffmpeg.exe")
-    if ffprobe_exe is None:
+    if locate_bundled("ffprobe.exe") is None:
         missing.append("ffprobe.exe")
 
     if not missing:
@@ -84,36 +60,20 @@ def _missing_bundled_dependency_message(
     )
 
 
-def _runtime_binary_dirs() -> list[Path]:
-    """Directories that may contain runtime binaries in packaged builds."""
-    if not getattr(sys, "frozen", False):
-        return []
+def _setup_dll_search_path(base_dir: Path | None = None) -> None:
+    """Prepend runtime binary dirs to PATH (and Windows DLL search on Windows).
 
-    dirs: list[Path] = []
-    meipass = getattr(sys, "_MEIPASS", None)
-    if meipass:
-        dirs.append(Path(meipass))
-    dirs.append(Path(sys.executable).parent)
-    return dirs
-
-
-def _setup_dll_search_path() -> None:
-    """In frozen mode, add the PyInstaller extraction directory to the Windows
-    DLL search path so that ``ctypes`` (used by python-mpv) can find
-    ``libmpv-2.dll`` without it being on the system ``PATH``.
+    Packaged builds use the PyInstaller extraction directory. Development uses
+    ``build/bin/`` when present so FFmpeg and libmpv do not need a global install.
 
     Must be called before any ``import mpv`` (i.e. before importing
     ``MainWindow``, which transitively imports ``player.py``).
-
-    No-op in development mode and on non-Windows platforms.
     """
-    if not getattr(sys, "frozen", False):
-        return
-    binary_dirs = [d for d in _runtime_binary_dirs() if d.exists()]
+    binary_dirs = [d for d in runtime_binary_dirs(base_dir) if d.exists()]
     if not binary_dirs:
         return
 
-    if hasattr(os, "add_dll_directory"):
+    if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
         for directory in binary_dirs:
             _DLL_DIRECTORY_HANDLES.append(os.add_dll_directory(str(directory)))
 
@@ -127,7 +87,6 @@ def _setup_dll_search_path() -> None:
 def _run_smoke_check(
     base_dir: Path,
     ffmpeg_exe: Path | None,
-    ffprobe_exe: Path | None,
     duration_ms: int = 250,
 ) -> int:
     from PySide6.QtCore import QTimer
@@ -160,7 +119,6 @@ def _run_smoke_check(
             library=Library(base_dir / "library.json"),
             base_dir=base_dir,
             ffmpeg_exe=ffmpeg_exe,
-            ffprobe_exe=ffprobe_exe,
         )
         window.show()
         if os.environ.get("KARAOKE_BUDDY_SMOKE_RAISE_UNCAUGHT"):
@@ -195,22 +153,24 @@ def main() -> None:
     log.info("KaraokeBuddy starting \u2014 base_dir=%s", base_dir)
 
     # Must happen before any import that pulls in python-mpv.
-    _setup_dll_search_path()
-    log.info("Runtime binary path configured")
+    _setup_dll_search_path(base_dir)
+    log.info("Runtime binary path configured: %s", runtime_binary_dirs(base_dir))
 
-    ffmpeg_exe = _locate_bundled("ffmpeg.exe")
-    ffprobe_exe = _locate_bundled("ffprobe.exe")
-    libmpv_dll = _locate_bundled("libmpv-2.dll")
+    ffmpeg_exe = locate_bundled("ffmpeg.exe")
+    ffprobe_exe = locate_bundled("ffprobe.exe")
+    libmpv_dll = locate_bundled("libmpv-2.dll")
+    deno_exe = locate_bundled("deno.exe")
     log.info(
-        "Bundled ffmpeg=%s ffprobe=%s libmpv=%s",
+        "Bundled ffmpeg=%s ffprobe=%s libmpv=%s deno=%s",
         ffmpeg_exe,
         ffprobe_exe,
         libmpv_dll,
+        deno_exe,
     )
 
     if smoke_check:
         with tempfile.TemporaryDirectory(prefix="karaoke-buddy-smoke-") as tmp:
-            sys.exit(_run_smoke_check(Path(tmp), ffmpeg_exe, ffprobe_exe))
+            sys.exit(_run_smoke_check(Path(tmp), ffmpeg_exe))
 
     from karaoke_buddy.core.dependency_preflight import (
         RuntimeDependencyError,
@@ -220,29 +180,19 @@ def main() -> None:
     try:
         preflight_runtime_dependencies(
             ffmpeg_exe=ffmpeg_exe,
-            ffprobe_exe=ffprobe_exe,
             libmpv_dll=libmpv_dll,
             frozen=bool(getattr(sys, "frozen", False)),
         )
     except RuntimeDependencyError as exc:
         log.exception(
-            "Dependency preflight failed: base_dir=%s frozen=%s ffmpeg=%s ffprobe=%s libmpv=%s",
+            "Dependency preflight failed: base_dir=%s frozen=%s ffmpeg=%s libmpv=%s",
             base_dir,
             bool(getattr(sys, "frozen", False)),
             ffmpeg_exe,
-            ffprobe_exe,
             libmpv_dll,
         )
-        from PySide6.QtWidgets import QApplication, QMessageBox
-
-        error_app = QApplication(sys.argv)
-        error_app.setApplicationName("KaraokeBuddy")
-        log.info("Qt application created")
-        QMessageBox.critical(
-            None,
-            "KaraokeBuddy",
-            str(exc),
-        )
+        print(str(exc), file=sys.stderr)
+        # QMessageBox from Git Bash / MSYS often segfaults; stderr is reliable.
         sys.exit(1)
 
     from PySide6.QtWidgets import QApplication
@@ -260,7 +210,6 @@ def main() -> None:
         library=library,
         base_dir=base_dir,
         ffmpeg_exe=ffmpeg_exe,
-        ffprobe_exe=ffprobe_exe,
     )
     window.show()
     log.info("Main window shown")

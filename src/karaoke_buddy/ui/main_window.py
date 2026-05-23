@@ -83,7 +83,6 @@ class MainWindow(QMainWindow):
         library: Library,
         base_dir: Path,
         ffmpeg_exe: Optional[Path] = None,
-        ffprobe_exe: Optional[Path] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -93,7 +92,6 @@ class MainWindow(QMainWindow):
         self._library = library
         self._base_dir = base_dir
         self._ffmpeg_exe = ffmpeg_exe
-        self._ffprobe_exe = ffprobe_exe
         self._current_entry: Optional[LibraryEntry] = None
         self._export_threads: list[ExportThread] = []
         self._resolve_thread: Optional[_ResolveThread] = None
@@ -101,7 +99,6 @@ class MainWindow(QMainWindow):
         self._resolver = SourceResolver(
             cache_dir=base_dir / "cache",
             ffmpeg_exe=ffmpeg_exe,
-            ffprobe_exe=ffprobe_exe,
         )
 
         self._stack = QStackedWidget()

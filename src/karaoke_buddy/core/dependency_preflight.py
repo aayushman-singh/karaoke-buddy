@@ -6,6 +6,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from karaoke_buddy.core.runtime_paths import locate_bundled
+
 log = logging.getLogger(__name__)
 
 
@@ -16,7 +18,6 @@ class RuntimeDependencyError(RuntimeError):
 def preflight_runtime_dependencies(
     *,
     ffmpeg_exe: Path | None,
-    ffprobe_exe: Path | None,
     libmpv_dll: Path | None,
     frozen: bool,
 ) -> None:
@@ -28,25 +29,34 @@ def preflight_runtime_dependencies(
             missing.append("ffmpeg.exe")
         else:
             missing.extend(_executable_problem("ffmpeg.exe", ffmpeg_exe))
+        ffprobe_exe = locate_bundled("ffprobe.exe")
         if ffprobe_exe is None:
             missing.append("ffprobe.exe")
         else:
             missing.extend(_executable_problem("ffprobe.exe", ffprobe_exe))
         if libmpv_dll is None:
             missing.append("libmpv-2.dll")
+        deno_exe = locate_bundled("deno.exe")
+        if deno_exe is None:
+            missing.append("deno.exe (YouTube downloads)")
+        else:
+            missing.extend(_executable_problem("deno.exe", deno_exe))
+        missing.extend(_import_problem("yt_dlp_ejs", "yt-dlp-ejs"))
     else:
         ffmpeg = shutil.which("ffmpeg")
-        ffprobe = shutil.which("ffprobe")
         if ffmpeg is None:
             missing.append("ffmpeg on PATH")
         else:
             missing.extend(_executable_problem("ffmpeg on PATH", ffmpeg))
+        ffprobe = shutil.which("ffprobe")
         if ffprobe is None:
             missing.append("ffprobe on PATH")
         else:
             missing.extend(_executable_problem("ffprobe on PATH", ffprobe))
 
     missing.extend(_import_problem("yt_dlp", "yt-dlp"))
+    if not frozen:
+        missing.extend(_import_problem("yt_dlp_ejs", "yt-dlp-ejs"))
     if not frozen or libmpv_dll is not None:
         missing.extend(_import_problem("mpv", "libmpv / python-mpv"))
 
