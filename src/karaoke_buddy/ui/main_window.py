@@ -15,15 +15,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from karaoke_buddy.core import errors as kb_errors
+from karaoke_buddy.core.errors import KBError
 from karaoke_buddy.core.exporter import ExportThread
 from karaoke_buddy.core.filter_chain import build_filter_chain
 from karaoke_buddy.core.library import Library, LibraryEntry, SavedOutput
+from karaoke_buddy.core.runtime_paths import default_export_dir
 from karaoke_buddy.core.source_resolver import (
     SourceResolver,
     YouTubeRuntimeDependencyError,
     is_youtube_url,
     youtube_runtime_diagnostics,
 )
+from karaoke_buddy.ui.error_dialog import ErrorDialog
 from karaoke_buddy.ui.home_view import HomeView
 from karaoke_buddy.ui.playing_view import PlayingView
 
@@ -39,7 +43,7 @@ _PLAYING_IDX = 1
 class _ResolveThread(QThread):
     progress = Signal(int)
     finished = Signal(object)
-    error = Signal(str)
+    error = Signal(object)
 
     def __init__(self, resolver: SourceResolver, input_str: str, parent=None) -> None:
         super().__init__(parent)
@@ -53,32 +57,26 @@ class _ResolveThread(QThread):
             )
             self.finished.emit(result)
         except FileNotFoundError:
-            self.error.emit("This file seems to have moved.")
+            log.exception("Local file missing input=%r", self._input)
+            self.error.emit(kb_errors.file_missing(self._input))
         except YouTubeRuntimeDependencyError as exc:
             log.exception(
                 "YouTube runtime dependency failed input=%r runtime=%s",
                 self._input,
                 exc.runtime_context,
             )
-            self.error.emit(
-                "YouTube setup problem: Deno or yt-dlp-ejs is missing, "
-                "incompatible, or could not run. Check the logs for the exact "
-                "runtime details."
-            )
-        except Exception:  # noqa: BLE001
+            self.error.emit(kb_errors.yt_runtime(str(exc)))
+        except Exception as exc:  # noqa: BLE001
             if is_youtube_url(self._input):
                 log.exception(
                     "YouTube resolve failed input=%r runtime=%s",
                     self._input,
                     youtube_runtime_diagnostics(),
                 )
-                self.error.emit(
-                    "Couldn't download this YouTube video. yt-dlp failed; "
-                    "check the logs for the URL and runtime details."
-                )
+                self.error.emit(kb_errors.youtube_failure(exc))
             else:
                 log.exception("Local source resolve failed input=%r", self._input)
-                self.error.emit("Couldn't open this file. Check the logs for details.")
+                self.error.emit(kb_errors.file_unreadable(str(exc)))
 
 
 class MainWindow(QMainWindow):
@@ -87,7 +85,6 @@ class MainWindow(QMainWindow):
         library: Library,
         base_dir: Path,
         ffmpeg_exe: Optional[Path] = None,
-        ffprobe_exe: Optional[Path] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -104,7 +101,6 @@ class MainWindow(QMainWindow):
         self._resolver = SourceResolver(
             cache_dir=base_dir / "cache",
             ffmpeg_exe=ffmpeg_exe,
-            ffprobe_exe=ffprobe_exe,
         )
 
         self._stack = QStackedWidget()
@@ -125,9 +121,14 @@ class MainWindow(QMainWindow):
         self._playing.filter_changed.connect(self._apply_filter)
         self._playing.seek_requested.connect(self._on_seek)
         self._playing.play_pause_toggled.connect(self._on_play_pause)
+        self._playing.volume_changed.connect(self._on_volume)
+        self._playing.speed_changed.connect(self._on_speed)
         self._playing.save_requested.connect(self._on_save)
         self._playing.back_to_library.connect(self._go_home)
         self._playing.settings_changed.connect(self._persist_settings)
+        self._playing.fullscreen_toggled.connect(self._on_fullscreen)
+
+        self._was_maximized_before_fullscreen = False
 
     def _go_home(self) -> None:
         if self._player:
@@ -137,6 +138,18 @@ class MainWindow(QMainWindow):
 
     def _go_playing(self) -> None:
         self._stack.setCurrentIndex(_PLAYING_IDX)
+
+    def _on_fullscreen(self, is_full: bool) -> None:
+        if is_full:
+            self._was_maximized_before_fullscreen = self.isMaximized()
+            self._playing.set_chrome_visible(False)
+            self.showFullScreen()
+        else:
+            self._playing.set_chrome_visible(True)
+            if self._was_maximized_before_fullscreen:
+                self.showMaximized()
+            else:
+                self.showNormal()
 
     def _resolve_input(self, input_str: str) -> None:
         progress = QProgressDialog("Loading\u2026", "Cancel", 0, 100, self)
@@ -166,6 +179,10 @@ class MainWindow(QMainWindow):
         )
         if existing:
             entry = existing
+            entry.title = resolved.title
+            entry.duration_seconds = resolved.duration_seconds
+            if resolved.thumbnail_path is not None:
+                entry.thumbnail_path = str(resolved.thumbnail_path)
         else:
             entry = LibraryEntry(
                 title=resolved.title,
@@ -189,7 +206,7 @@ class MainWindow(QMainWindow):
         cached = entry.cached_path or entry.source
         path = Path(cached)
         if not path.exists():
-            self._show_error("This file seems to have moved.")
+            self._show_error(kb_errors.cached_path_missing(str(path)))
             self._library.remove(entry.id)
             self._home.refresh_library()
             return
@@ -205,6 +222,8 @@ class MainWindow(QMainWindow):
             from karaoke_buddy.core.player import Player
 
             self._player = Player(self._playing.video_widget)
+            self._player.set_volume(100)
+            self._player.set_speed(1.0)
             self._player.playback_time_changed.connect(self._playing.update_time)
             self._player.duration_changed.connect(self._playing.update_duration)
             self._player.paused_changed.connect(self._playing.update_paused)
@@ -225,18 +244,25 @@ class MainWindow(QMainWindow):
         if self._player:
             self._player.toggle_play_pause()
 
-    def _persist_settings(self, pitch: int, vocal_reduce: int) -> None:
+    def _on_volume(self, percent: int) -> None:
+        if self._player:
+            self._player.set_volume(percent)
+
+    def _on_speed(self, speed: float) -> None:
+        if self._player:
+            self._player.set_speed(speed)
+
+    def _persist_settings(self, pitch: int) -> None:
         if self._current_entry:
             self._current_entry.last_pitch = pitch
-            self._current_entry.last_vocal_reduce = vocal_reduce
             self._library.upsert(self._current_entry)
 
-    def _on_save(self, pitch: int, vocal_reduce: int) -> None:
+    def _on_save(self, pitch: int) -> None:
         if not self._current_entry:
             return
 
-        default_dir = self._base_dir / "Pitched Songs"
-        default_dir.mkdir(exist_ok=True)
+        default_dir = default_export_dir()
+        default_dir.mkdir(parents=True, exist_ok=True)
 
         key_str = f"key {pitch:+d}" if pitch != 0 else "normal key"
         default_name = f"{self._current_entry.title} ({key_str}).mp4"
@@ -250,7 +276,7 @@ class MainWindow(QMainWindow):
         if not output_path:
             return
 
-        chain = build_filter_chain(pitch, vocal_reduce)
+        chain = build_filter_chain(pitch, 0)
         cached = Path(self._current_entry.cached_path or self._current_entry.source)
 
         progress = QProgressDialog("Saving\u2026", "Cancel", 0, 100, self)
@@ -261,33 +287,40 @@ class MainWindow(QMainWindow):
         self._export_threads.append(thread)
 
         thread.progress.connect(progress.setValue)
-        thread.finished.connect(
-            lambda p: self._on_export_done(p, pitch, vocal_reduce, progress)
-        )
+        thread.finished.connect(lambda p: self._on_export_done(p, pitch, progress))
         thread.error.connect(lambda msg: self._show_error(msg, progress))
         progress.canceled.connect(thread.cancel)
         thread.start()
 
-    def _on_export_done(
-        self, output_path: str, pitch: int, vocal_reduce: int, progress
-    ) -> None:
+    def _on_export_done(self, output_path: str, pitch: int, progress) -> None:
         progress.close()
         if self._current_entry:
             self._current_entry.saved_outputs.append(
                 SavedOutput(
                     path=output_path,
                     pitch=pitch,
-                    vocal_reduce=vocal_reduce,
+                    vocal_reduce=0,
                     saved_at=datetime.now(timezone.utc).isoformat(),
                 )
             )
             self._library.upsert(self._current_entry)
         QMessageBox.information(self, "Saved", f"Saved to:\n{output_path}")
 
-    def _show_error(self, message: str, progress=None) -> None:
+    def _show_error(self, err: KBError | str, progress=None) -> None:
         if progress:
             progress.close()
-        QMessageBox.warning(self, "KaraokeBuddy", message)
+        if isinstance(err, str):
+            err = KBError(
+                code="KB-MISC",
+                title="Something went wrong",
+                user_message=err,
+                hint="Try the action again. If the problem repeats, share the error code with support.",
+            )
+        log_path = self._base_dir / "logs" / "app.log"
+        dialog = ErrorDialog(
+            err, log_path=log_path if log_path.exists() else None, parent=self
+        )
+        dialog.exec()
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         if self._player:

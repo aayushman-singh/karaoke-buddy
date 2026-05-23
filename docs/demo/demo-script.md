@@ -8,7 +8,7 @@
 
 0:14 - Raise Silence the singer to reduce guide vocals without changing tempo.
 
-0:20 - Click Save this version and choose the default Pitched Songs folder.
+0:20 - Click Save this version and accept the default `~/Videos/KaraokeBuddy/` folder.
 
 0:26 - Show the exported MP4 in the saved location, ready to rehearse or share.
 
