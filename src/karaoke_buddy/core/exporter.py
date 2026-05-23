@@ -142,7 +142,7 @@ class ExportThread(QThread):
 
     progress = Signal(int)
     finished = Signal(str)
-    error = Signal(str)
+    error = Signal(object)
 
     def __init__(
         self,
@@ -169,10 +169,12 @@ class ExportThread(QThread):
             )
             if not self._cancelled:
                 self.finished.emit(str(self._output))
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             log.exception("Export failed")
             if not self._cancelled:
-                self.error.emit("Couldn't save here — try a different folder.")
+                from karaoke_buddy.core.errors import export_failure  # noqa: PLC0415
+
+                self.error.emit(export_failure(exc))
 
     def cancel(self) -> None:
         self._cancelled = True

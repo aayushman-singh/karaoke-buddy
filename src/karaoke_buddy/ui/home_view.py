@@ -167,9 +167,15 @@ class HomeView(QWidget):
                 self._clip_label.setText("\U0001f3b5 Fetching title\u2026")
                 self._clip_label.show()
 
-                if self._clip_meta_worker and self._clip_meta_worker.isRunning():
-                    self._clip_meta_worker.terminate()
-                    self._clip_meta_worker.wait(500)
+                prev = self._clip_meta_worker
+                if prev is not None:
+                    try:
+                        if prev.isRunning():
+                            prev.terminate()
+                            prev.wait(500)
+                    except RuntimeError:
+                        # C++ object already deleted (finished + deleteLater'd)
+                        pass
 
                 worker = _ClipMetaWorker(text, parent=self)
                 worker.title_ready.connect(lambda title, url=text: self._on_clip_title(title, url))
@@ -179,7 +185,7 @@ class HomeView(QWidget):
                         " \u2014 click \u201cPaste YouTube link\u201d to open"
                     )
                 )
-                worker.finished.connect(worker.deleteLater)
+                worker.finished.connect(self._on_clip_worker_finished)
                 self._clip_meta_worker = worker
                 worker.start()
             # else: same URL, label already up-to-date
@@ -192,3 +198,10 @@ class HomeView(QWidget):
         if url == self._last_clip_url:  # guard against stale workers
             self._clip_label.setText(f"Paste this? \U0001f3b5  {title}")
             self._clip_label.show()
+
+    def _on_clip_worker_finished(self) -> None:
+        sender = self.sender()
+        if sender is self._clip_meta_worker:
+            self._clip_meta_worker = None
+        if sender is not None:
+            sender.deleteLater()
