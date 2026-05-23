@@ -85,7 +85,7 @@ jobs:
           sha256sum build/dist/KaraokeBuddy.exe
 
       - name: Upload build artifact (for dispatch runs and debugging)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: KaraokeBuddy-windows
           path: build/dist/KaraokeBuddy.exe
