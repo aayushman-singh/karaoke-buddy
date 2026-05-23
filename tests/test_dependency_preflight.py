@@ -127,9 +127,7 @@ def test_preflight_passes_when_runtime_is_available() -> None:
                 stdout="version",
                 stderr="",
             )
-            with patch(
-                "importlib.import_module", return_value=object()
-            ) as import_module:
+            with patch("importlib.import_module", return_value=object()) as import_module:
                 preflight_runtime_dependencies(
                     ffmpeg_exe=None,
                     ffprobe_exe=None,

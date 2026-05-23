@@ -1,4 +1,4 @@
-"""Exporter — bakes current pitch/vocal-reduce settings into a new MP4."""
+"""Exporter - bakes current pitch/vocal-reduce settings into a new MP4."""
 
 import logging
 import os
@@ -41,32 +41,21 @@ class Exporter:
         try:
             self._run(input_path, filter_chain, tmp, progress_callback, video_copy=True)
         except FileNotFoundError as exc:
-            # ffmpeg binary not found — clean up and surface a plain-English error.
+            # ffmpeg binary not found; clean up and surface a plain-English error.
             if tmp.exists():
                 tmp.unlink()
-            raise RuntimeError(
-                "FFmpeg was not found. Please re-download KaraokeBuddy."
-            ) from exc
-        except subprocess.CalledProcessError:
-            log.info("Stream-copy failed; retrying with libx264 re-encode")
+            raise RuntimeError("FFmpeg was not found. Please re-download KaraokeBuddy.") from exc
+        except subprocess.CalledProcessError as exc:
+            log.exception(
+                "Export failed: input=%s output=%s tmp=%s filter_chain=%r",
+                input_path,
+                output_path,
+                tmp,
+                filter_chain,
+            )
             if tmp.exists():
                 tmp.unlink()
-            try:
-                self._run(
-                    input_path, filter_chain, tmp, progress_callback, video_copy=False
-                )
-            except FileNotFoundError as exc:
-                if tmp.exists():
-                    tmp.unlink()
-                raise RuntimeError(
-                    "FFmpeg was not found. Please re-download KaraokeBuddy."
-                ) from exc
-            except subprocess.CalledProcessError as exc:
-                if tmp.exists():
-                    tmp.unlink()
-                raise RuntimeError(
-                    f"Export failed: {exc.stderr[-500:] if exc.stderr else ''}"
-                ) from exc
+            raise RuntimeError(f"Export failed: {exc.stderr[-500:] if exc.stderr else ''}") from exc
 
         os.replace(tmp, output_path)
 
@@ -142,9 +131,7 @@ class Exporter:
 
         if proc.returncode != 0:
             stderr_text = "".join(stderr_lines)
-            raise subprocess.CalledProcessError(
-                proc.returncode, cmd, stderr=stderr_text
-            )
+            raise subprocess.CalledProcessError(proc.returncode, cmd, stderr=stderr_text)
 
         if progress_callback:
             progress_callback(100)

@@ -22,9 +22,7 @@ def test_locate_bundled_finds_dll_in_meipass(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
     # exe.parent does NOT contain the DLL — we want _MEIPASS to win
-    monkeypatch.setattr(
-        sys, "executable", str(tmp_path / "KaraokeBuddy.exe"), raising=False
-    )
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "KaraokeBuddy.exe"), raising=False)
 
     from karaoke_buddy.__main__ import _locate_bundled
 
@@ -44,9 +42,7 @@ def test_locate_bundled_falls_back_to_exe_parent_if_no_meipass(monkeypatch, tmp_
         monkeypatch.delattr(sys, "_MEIPASS")
     except AttributeError:
         pass
-    monkeypatch.setattr(
-        sys, "executable", str(exe_parent / "KaraokeBuddy.exe"), raising=False
-    )
+    monkeypatch.setattr(sys, "executable", str(exe_parent / "KaraokeBuddy.exe"), raising=False)
 
     from karaoke_buddy.__main__ import _locate_bundled
 
@@ -61,9 +57,7 @@ def test_locate_bundled_returns_none_when_file_absent(monkeypatch, tmp_path):
 
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
-    monkeypatch.setattr(
-        sys, "executable", str(tmp_path / "KaraokeBuddy.exe"), raising=False
-    )
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "KaraokeBuddy.exe"), raising=False)
 
     from karaoke_buddy.__main__ import _locate_bundled
 
@@ -100,9 +94,7 @@ def test_setup_dll_search_path_adds_meipass_in_frozen_mode(monkeypatch, tmp_path
 
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
-    monkeypatch.setattr(
-        os, "add_dll_directory", lambda d: added.append(d), raising=False
-    )
+    monkeypatch.setattr(os, "add_dll_directory", lambda d: added.append(d), raising=False)
 
     from karaoke_buddy.__main__ import _setup_dll_search_path
 
@@ -123,12 +115,8 @@ def test_setup_dll_search_path_adds_exe_parent_in_onedir_mode(monkeypatch, tmp_p
         monkeypatch.delattr(sys, "_MEIPASS")
     except AttributeError:
         pass
-    monkeypatch.setattr(
-        sys, "executable", str(exe_parent / "KaraokeBuddy.exe"), raising=False
-    )
-    monkeypatch.setattr(
-        os, "add_dll_directory", lambda d: added.append(d), raising=False
-    )
+    monkeypatch.setattr(sys, "executable", str(exe_parent / "KaraokeBuddy.exe"), raising=False)
+    monkeypatch.setattr(os, "add_dll_directory", lambda d: added.append(d), raising=False)
     monkeypatch.setenv("PATH", "")
 
     from karaoke_buddy.__main__ import _setup_dll_search_path
@@ -155,9 +143,7 @@ def test_setup_dll_search_path_retains_handles(monkeypatch, tmp_path):
 
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
-    monkeypatch.setattr(
-        sys, "executable", str(exe_parent / "KaraokeBuddy.exe"), raising=False
-    )
+    monkeypatch.setattr(sys, "executable", str(exe_parent / "KaraokeBuddy.exe"), raising=False)
     monkeypatch.setattr(os, "add_dll_directory", _add_dll_directory, raising=False)
 
     import karaoke_buddy.__main__ as entrypoint
@@ -172,9 +158,7 @@ def test_setup_dll_search_path_is_noop_in_dev_mode(monkeypatch):
     added: list[str] = []
 
     monkeypatch.setattr(sys, "frozen", False, raising=False)
-    monkeypatch.setattr(
-        os, "add_dll_directory", lambda d: added.append(d), raising=False
-    )
+    monkeypatch.setattr(os, "add_dll_directory", lambda d: added.append(d), raising=False)
 
     from karaoke_buddy.__main__ import _setup_dll_search_path
 

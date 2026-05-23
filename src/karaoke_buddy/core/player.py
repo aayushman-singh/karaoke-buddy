@@ -1,4 +1,4 @@
-"""Player — libmpv wrapper bound to a PySide6 render widget."""
+"""Player - libmpv wrapper bound to a PySide6 render widget."""
 
 import logging
 from pathlib import Path
@@ -18,23 +18,30 @@ class Player(QObject):
     paused_changed = Signal(bool)
     end_of_file = Signal()
 
-    def __init__(
-        self, render_widget: QWidget, parent: Optional[QObject] = None
-    ) -> None:
+    def __init__(self, render_widget: QWidget, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
         import mpv  # noqa: PLC0415
 
         self._widget = render_widget
+        hwnd = int(render_widget.winId())
+        log.info(
+            "Player attach: wid=%s widget_size=%dx%d visible=%s",
+            hwnd,
+            render_widget.width(),
+            render_widget.height(),
+            render_widget.isVisible(),
+        )
         self._mpv = mpv.MPV(
-            wid=str(int(render_widget.winId())),
-            vo="gpu",
+            wid=str(hwnd),
+            vo="gpu,direct3d",
             keep_open=True,
             log_handler=self._on_log,
-            loglevel="warn",
+            loglevel="info",
         )
         self._setup_observers()
 
     def load(self, path: str | Path) -> None:
+        log.info("Player load: path=%s", path)
         self._mpv.pause = True
         self._mpv.loadfile(str(path))
 
@@ -42,7 +49,8 @@ class Player(QObject):
         try:
             self._mpv.command("af", "set", chain)
         except Exception as exc:  # noqa: BLE001
-            log.warning("af set failed: %s", exc)
+            log.exception("mpv af set failed: chain=%r", chain)
+            raise RuntimeError(f"Could not apply playback filter: {chain}") from exc
 
     def play(self) -> None:
         self._mpv.pause = False
@@ -52,6 +60,12 @@ class Player(QObject):
 
     def toggle_play_pause(self) -> None:
         self._mpv.pause = not self._mpv.pause
+
+    def set_volume(self, percent: int) -> None:
+        self._mpv.volume = max(0, min(100, percent))
+
+    def set_speed(self, speed: float) -> None:
+        self._mpv.speed = max(0.25, min(4.0, speed))
 
     def seek(self, seconds: float) -> None:
         self._mpv.seek(seconds, "absolute")
@@ -91,10 +105,19 @@ class Player(QObject):
                 self.paused_changed.emit(bool(value))
 
         @self._mpv.event_callback("end-file")
-        def _on_end(event: dict) -> None:
-            if event.get("reason") == "eof":
+        def _on_end(event) -> None:
+            end = event.data
+            if end is not None and end.reason == end.EOF:
                 self.end_of_file.emit()
 
     @staticmethod
     def _on_log(level: str, component: str, message: str) -> None:
-        log.debug("[mpv/%s] %s", component, message)
+        normalised = (level or "").strip().lower()
+        if normalised in ("fatal", "error"):
+            log.error("[mpv/%s] %s", component, message.strip())
+        elif normalised in ("warn", "warning"):
+            log.warning("[mpv/%s] %s", component, message.strip())
+        elif normalised in ("info", "status", "v"):
+            log.info("[mpv/%s] %s", component, message.strip())
+        else:
+            log.debug("[mpv/%s] %s", component, message.strip())

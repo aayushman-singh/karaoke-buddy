@@ -9,6 +9,9 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - CI now installs the project package with its development dependencies before
   running tests, so the tested import surface matches a real checkout.
+- Thumbnail generation, unreadable library files, missing library mutation
+  targets, playback filter failures, and stream-copy export failures now stop
+  the dependent workflow instead of continuing with degraded behavior.
 
 ### Changed
 - Reworked the README for open-source review: clearer user story, setup path,
@@ -16,11 +19,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Default export folder is now `~/Videos/KaraokeBuddy/` on both Windows and
   Linux (previously `Pitched Songs/` next to the exe). The folder is created
   on first export.
+- Ignored local export folders and coverage data so release commits do not
+  accidentally include generated artifacts.
 
 ### Added
 - `LICENSE` (MIT) and `NOTICE.md` documenting bundled-binary licenses.
 - `CONTRIBUTING.md` with dev setup and PR guidance.
-- GitHub Actions CI: ruff + fast unit tests on every push and PR.
+- GitHub Actions CI: ruff + non-FFmpeg tests on every push and PR.
 
 ## [0.1.0] - 2026-04-17
 

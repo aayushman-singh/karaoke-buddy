@@ -12,9 +12,7 @@ def _run_launch_smoke(tmp_path, env_overrides=None):
     repo_root = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(repo_root / "src"), env.get("PYTHONPATH", "")]
-    )
+    env["PYTHONPATH"] = os.pathsep.join([str(repo_root / "src"), env.get("PYTHONPATH", "")])
     if env_overrides:
         env.update(env_overrides)
 
@@ -31,18 +29,14 @@ def _run_launch_smoke(tmp_path, env_overrides=None):
     except subprocess.TimeoutExpired as exc:
         stdout = exc.stdout or ""
         stderr = exc.stderr or ""
-        pytest.fail(
-            f"Launch smoke check timed out.\nstdout:\n{stdout}\nstderr:\n{stderr}"
-        )
+        pytest.fail(f"Launch smoke check timed out.\nstdout:\n{stdout}\nstderr:\n{stderr}")
 
 
 def test_launch_smoke_imports_ui_and_runs_event_loop(tmp_path):
     result = _run_launch_smoke(tmp_path)
 
     assert result.returncode == 0, (
-        "Launch smoke check failed.\n"
-        f"stdout:\n{result.stdout}\n"
-        f"stderr:\n{result.stderr}"
+        f"Launch smoke check failed.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     )
     assert "Traceback (most recent call last)" not in result.stderr
     assert "Uncaught exception during launch smoke check" not in result.stderr

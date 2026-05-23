@@ -1,5 +1,6 @@
-"""Tests for SourceResolver — URL detection, local resolution, cache hit."""
+"""Tests for SourceResolver - URL detection, local resolution, cache hit."""
 
+import subprocess
 from unittest.mock import patch
 
 import pytest
@@ -51,9 +52,7 @@ def test_youtube_runtime_warnings_fail_loud():
     opts = youtube_extraction_options()
 
     with pytest.raises(YouTubeRuntimeDependencyError):
-        opts["logger"].warning(
-            "[youtube] No supported JavaScript runtime could be found"
-        )
+        opts["logger"].warning("[youtube] No supported JavaScript runtime could be found")
 
 
 def test_local_file_resolve_returns_resolved_source(tmp_path):
@@ -62,9 +61,7 @@ def test_local_file_resolve_returns_resolved_source(tmp_path):
 
     resolver = SourceResolver(cache_dir=tmp_path / "cache")
 
-    with patch.object(
-        resolver, "_probe", return_value={"format": {"duration": "180.5"}}
-    ):
+    with patch.object(resolver, "_probe", return_value={"format": {"duration": "180.5"}}):
         with patch.object(resolver, "_extract_thumbnail"):
             result = resolver.resolve(str(fake_mp4))
 
@@ -86,6 +83,29 @@ def test_local_file_title_is_stem(tmp_path):
     assert result.title == "Hotel California"
 
 
+def test_thumbnail_generation_failure_raises(tmp_path, caplog) -> None:
+    resolver = SourceResolver(cache_dir=tmp_path / "cache")
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"\x00")
+    thumb = tmp_path / "cache" / "thumb.jpg"
+
+    with patch.object(
+        resolver,
+        "_extract_thumbnail",
+        side_effect=subprocess.CalledProcessError(
+            returncode=1,
+            cmd=["ffmpeg"],
+            stderr=b"invalid data",
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="Could not generate thumbnail"):
+            resolver._ensure_thumbnail(video, thumb)
+
+    assert "Thumbnail generation failed" in caplog.text
+    assert str(video) in caplog.text
+    assert str(thumb) in caplog.text
+
+
 def test_local_missing_file_raises(tmp_path):
     resolver = SourceResolver(cache_dir=tmp_path / "cache")
     with pytest.raises(FileNotFoundError):
@@ -105,9 +125,7 @@ def test_cache_hit_skips_yt_dlp_download(tmp_path):
     with patch("yt_dlp.YoutubeDL") as MockYDL:
         instance = MockYDL.return_value.__enter__.return_value
         instance.extract_info.return_value = fake_info
-        with patch.object(
-            resolver, "_probe", return_value={"format": {"duration": "213"}}
-        ):
+        with patch.object(resolver, "_probe", return_value={"format": {"duration": "213"}}):
             with patch.object(resolver, "_extract_thumbnail"):
                 result = resolver.resolve(f"https://www.youtube.com/watch?v={video_id}")
 

@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .venv/
 .worktrees/
+.coverage
 dist/
 build/dist/
 build/bin/*.dll
@@ -12,5 +13,6 @@ cache/
 logs/
 library.json
 library.json.corrupted-*
+Pitched Songs/
 data/
 *.tmp

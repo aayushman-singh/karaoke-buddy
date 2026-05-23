@@ -1,4 +1,4 @@
-"""Source Resolver — turns a local path or YouTube URL into a local file + metadata."""
+"""Source Resolver - turns a local path or YouTube URL into a local file + metadata."""
 
 import hashlib
 import json
@@ -302,7 +302,7 @@ class SourceResolver:
             check=True,
         )
 
-    def _ensure_thumbnail(self, video: Path, out: Path) -> Optional[Path]:
+    def _ensure_thumbnail(self, video: Path, out: Path) -> Path:
         if out.exists():
             return out
         try:
@@ -310,8 +310,13 @@ class SourceResolver:
             self._extract_thumbnail(video, out)
             return out
         except Exception as exc:  # noqa: BLE001
-            log.warning("Thumbnail generation failed for %s: %s", video, exc)
-            return None
+            log.exception(
+                "Thumbnail generation failed: video=%s output=%s ffmpeg=%s",
+                video,
+                out,
+                self._ffmpeg,
+            )
+            raise RuntimeError(f"Could not generate thumbnail for {video}") from exc
 
     def _local_cache_dir(self, path: Path) -> Path:
         h = hashlib.md5(str(path.resolve()).encode()).hexdigest()[:8]

@@ -1,8 +1,8 @@
-"""Library — persistent video history with per-song settings.
+"""Library - persistent video history with per-song settings.
 
 Backed by a single library.json next to the executable.
-Writes are atomic (temp file + os.replace). Corrupt files are
-renamed and discarded rather than crashing the app.
+Writes are atomic (temp file + os.replace). Invalid library files stop startup
+instead of being discarded or replaced with an empty history.
 """
 
 import json
@@ -15,6 +15,10 @@ from pathlib import Path
 from typing import Optional
 
 log = logging.getLogger(__name__)
+
+
+class LibraryLoadError(RuntimeError):
+    """Raised when an existing library file cannot be loaded safely."""
 
 
 @dataclass
@@ -36,9 +40,7 @@ class LibraryEntry:
     duration_seconds: int = 0
     last_pitch: int = 0
     last_vocal_reduce: int = 0
-    last_opened: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    last_opened: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     saved_outputs: list[SavedOutput] = field(default_factory=list)
 
 
@@ -70,7 +72,10 @@ class Library:
         self._save()
 
     def remove(self, entry_id: str) -> None:
-        self._entries.pop(entry_id, None)
+        if entry_id not in self._entries:
+            log.error("Cannot remove missing library entry: entry_id=%s", entry_id)
+            raise KeyError(entry_id)
+        self._entries.pop(entry_id)
         self._save()
 
     def find_by_source(self, source: str) -> "Optional[LibraryEntry]":
@@ -84,7 +89,13 @@ class Library:
         """Update last_opened, last_pitch, last_vocal_reduce; persist."""
         entry = self._entries.get(entry_id)
         if entry is None:
-            return
+            log.error(
+                "Cannot touch missing library entry: entry_id=%s pitch=%s vocal_reduce=%s",
+                entry_id,
+                pitch,
+                vocal_reduce,
+            )
+            raise KeyError(entry_id)
         entry.last_opened = datetime.now(timezone.utc).isoformat()
         entry.last_pitch = pitch
         entry.last_vocal_reduce = vocal_reduce
@@ -96,7 +107,15 @@ class Library:
         """Append a saved output record to an entry; persist."""
         entry = self._entries.get(entry_id)
         if entry is None:
-            return
+            log.error(
+                "Cannot add saved output to missing library entry: entry_id=%s output_path=%s "
+                "pitch=%s vocal_reduce=%s",
+                entry_id,
+                output_path,
+                pitch,
+                vocal_reduce,
+            )
+            raise KeyError(entry_id)
         entry.saved_outputs.append(
             SavedOutput(
                 path=output_path,
@@ -124,10 +143,8 @@ class Library:
                 )
                 self._entries[entry.id] = entry
         except Exception as exc:  # noqa: BLE001
-            log.warning("library.json unreadable (%s) — starting fresh", exc)
-            ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-            corrupted = self._path.with_name(f"library.json.corrupted-{ts}")
-            self._path.rename(corrupted)
+            log.exception("Could not load library file: path=%s", self._path)
+            raise LibraryLoadError(f"Could not load library file: {self._path}") from exc
 
     def _save(self) -> None:
         payload = json.dumps(

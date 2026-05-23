@@ -100,8 +100,6 @@ def _import_problem(module_name: str, label: str) -> list[str]:
     try:
         importlib.import_module(module_name)
     except Exception as exc:  # noqa: BLE001
-        log.exception(
-            "Dependency import failed: module=%s label=%s", module_name, label
-        )
+        log.exception("Dependency import failed: module=%s label=%s", module_name, label)
         return [f"{label} could not be loaded ({type(exc).__name__}: {exc})"]
     return []

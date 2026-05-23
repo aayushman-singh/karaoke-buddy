@@ -172,9 +172,7 @@ class HomeView(QWidget):
                     self._clip_meta_worker.wait(500)
 
                 worker = _ClipMetaWorker(text, parent=self)
-                worker.title_ready.connect(
-                    lambda title, url=text: self._on_clip_title(title, url)
-                )
+                worker.title_ready.connect(lambda title, url=text: self._on_clip_title(title, url))
                 worker.fetch_failed.connect(
                     lambda: self._clip_label.setText(
                         "\U0001f3b5 YouTube link detected"

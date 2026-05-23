@@ -19,9 +19,7 @@ def _setup_logging(log_dir: Path) -> None:
         backupCount=3,
         encoding="utf-8",
     )
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-    )
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.INFO)
 
@@ -168,16 +166,13 @@ def _run_smoke_check(
         if os.environ.get("KARAOKE_BUDDY_SMOKE_RAISE_UNCAUGHT"):
             QTimer.singleShot(
                 0,
-                lambda: (_ for _ in ()).throw(
-                    RuntimeError("Injected launch smoke exception")
-                ),
+                lambda: (_ for _ in ()).throw(RuntimeError("Injected launch smoke exception")),
             )
         QTimer.singleShot(duration_ms, app.quit)
         exit_code = int(app.exec())
         if uncaught_exceptions:
             raise RuntimeError(
-                "Launch smoke check hit uncaught exception:\n"
-                + "\n".join(uncaught_exceptions)
+                "Launch smoke check hit uncaught exception:\n" + "\n".join(uncaught_exceptions)
             )
         return exit_code
     finally:
@@ -231,8 +226,7 @@ def main() -> None:
         )
     except RuntimeDependencyError as exc:
         log.exception(
-            "Dependency preflight failed: base_dir=%s frozen=%s ffmpeg=%s "
-            "ffprobe=%s libmpv=%s",
+            "Dependency preflight failed: base_dir=%s frozen=%s ffmpeg=%s ffprobe=%s libmpv=%s",
             base_dir,
             bool(getattr(sys, "frozen", False)),
             ffmpeg_exe,

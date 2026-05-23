@@ -52,9 +52,7 @@ class _ResolveThread(QThread):
 
     def run(self) -> None:
         try:
-            result = self._resolver.resolve(
-                self._input, progress_callback=self.progress.emit
-            )
+            result = self._resolver.resolve(self._input, progress_callback=self.progress.emit)
             self.finished.emit(result)
         except FileNotFoundError:
             log.exception("Local file missing input=%r", self._input)
@@ -85,6 +83,7 @@ class MainWindow(QMainWindow):
         library: Library,
         base_dir: Path,
         ffmpeg_exe: Optional[Path] = None,
+        ffprobe_exe: Optional[Path] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -94,6 +93,7 @@ class MainWindow(QMainWindow):
         self._library = library
         self._base_dir = base_dir
         self._ffmpeg_exe = ffmpeg_exe
+        self._ffprobe_exe = ffprobe_exe
         self._current_entry: Optional[LibraryEntry] = None
         self._export_threads: list[ExportThread] = []
         self._resolve_thread: Optional[_ResolveThread] = None
@@ -101,6 +101,7 @@ class MainWindow(QMainWindow):
         self._resolver = SourceResolver(
             cache_dir=base_dir / "cache",
             ffmpeg_exe=ffmpeg_exe,
+            ffprobe_exe=ffprobe_exe,
         )
 
         self._stack = QStackedWidget()
@@ -189,9 +190,7 @@ class MainWindow(QMainWindow):
                 source_type=resolved.source_type,
                 source=resolved.source,
                 cached_path=resolved_posix,
-                thumbnail_path=str(resolved.thumbnail_path)
-                if resolved.thumbnail_path
-                else None,
+                thumbnail_path=str(resolved.thumbnail_path) if resolved.thumbnail_path else None,
                 duration_seconds=resolved.duration_seconds,
             )
         entry.last_opened = datetime.now(timezone.utc).isoformat()
@@ -317,9 +316,7 @@ class MainWindow(QMainWindow):
                 hint="Try the action again. If the problem repeats, share the error code with support.",
             )
         log_path = self._base_dir / "logs" / "app.log"
-        dialog = ErrorDialog(
-            err, log_path=log_path if log_path.exists() else None, parent=self
-        )
+        dialog = ErrorDialog(err, log_path=log_path if log_path.exists() else None, parent=self)
         dialog.exec()
 
     def closeEvent(self, event) -> None:  # type: ignore[override]

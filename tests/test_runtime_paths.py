@@ -23,9 +23,7 @@ def test_locate_bundled_finds_deno_in_meipass(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
-    monkeypatch.setattr(
-        sys, "executable", str(tmp_path / "KaraokeBuddy.exe"), raising=False
-    )
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "KaraokeBuddy.exe"), raising=False)
 
     assert locate_bundled("deno.exe") == deno
 
@@ -38,9 +36,7 @@ def test_resolve_deno_uses_bundled_when_frozen(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
-    monkeypatch.setattr(
-        sys, "executable", str(tmp_path / "KaraokeBuddy.exe"), raising=False
-    )
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "KaraokeBuddy.exe"), raising=False)
 
     assert resolve_deno_executable() == str(deno)
 
@@ -60,9 +56,7 @@ def test_resolve_ffprobe_uses_bundled_when_frozen(monkeypatch, tmp_path) -> None
 
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
-    monkeypatch.setattr(
-        sys, "executable", str(tmp_path / "KaraokeBuddy.exe"), raising=False
-    )
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "KaraokeBuddy.exe"), raising=False)
 
     assert resolve_ffprobe_executable() == str(ffprobe)
 

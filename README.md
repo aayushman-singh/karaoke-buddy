@@ -18,7 +18,7 @@ KaraokeBuddy replaces a fiddly manual workflow - downloading a karaoke track, sh
 - Reduces centered guide vocals with a simple vocal-reduction control.
 - Exports the current key as a new MP4.
 - Remembers recent songs, thumbnails, saved outputs, and per-song settings.
-- Fails loudly when runtime dependencies are missing, with logs written to `logs/app.log`.
+- Fails loudly when startup, source resolution, thumbnail generation, playback filtering, or export cannot complete, with logs written to `logs/app.log`.
 
 | Home and library | Live playback controls |
 | --- | --- |
@@ -87,7 +87,7 @@ The automated tests are worth keeping, but they are not pretending to be a full 
 
 - **Audio filter math:** example and property tests verify that semitone shifts map to the expected pitch scale and that both playback/export paths share the same transformation contract.
 - **Source resolution:** tests cover YouTube URL detection, local-file resolution, cache hits, ffprobe parsing, and explicit failures for broken metadata/runtime paths.
-- **Library persistence:** tests cover JSON round trips, atomic writes, ordering, saved outputs, and corrupted-file quarantine.
+- **Library persistence:** tests cover JSON round trips, atomic writes, ordering, saved outputs, and explicit failure for unreadable library files.
 - **Dependency preflight:** tests check that missing or unloadable native pieces produce actionable startup errors.
 - **Launch smoke:** a subprocess test imports the real Qt UI path and runs the event loop briefly with `QT_QPA_PLATFORM=offscreen`.
 

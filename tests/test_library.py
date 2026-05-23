@@ -1,4 +1,4 @@
-"""Tests for Library — JSON persistence, round-trip, and corruption recovery."""
+"""Tests for Library - JSON persistence, round trips, and explicit load failures."""
 
 from pathlib import Path
 
@@ -56,8 +56,9 @@ def test_remove_deletes_entry(lib):
     assert lib.list() == []
 
 
-def test_remove_nonexistent_id_is_silent(lib):
-    lib.remove("ghost-id")
+def test_remove_unknown_id_raises(lib):
+    with pytest.raises(KeyError, match="ghost-id"):
+        lib.remove("ghost-id")
 
 
 def test_upsert_writes_to_disk(lib_path, lib):
@@ -97,6 +98,41 @@ def test_saved_outputs_survive_round_trip(tmp_path):
     assert reloaded.saved_outputs[0].pitch == -3
 
 
+def test_touch_updates_last_opened_and_settings(lib):
+    entry = make_entry(last_opened="2026-01-01T00:00:00+00:00")
+    lib.upsert(entry)
+
+    lib.touch(entry.id, pitch=-2, vocal_reduce=35)
+    updated = lib.get(entry.id)
+
+    assert updated.last_pitch == -2
+    assert updated.last_vocal_reduce == 35
+    assert updated.last_opened != "2026-01-01T00:00:00+00:00"
+
+
+def test_touch_unknown_id_raises(lib):
+    with pytest.raises(KeyError, match="ghost-id"):
+        lib.touch("ghost-id", pitch=1, vocal_reduce=10)
+
+
+def test_add_saved_output_appends_record(lib):
+    entry = make_entry()
+    lib.upsert(entry)
+
+    lib.add_saved_output(entry.id, "C:/Videos/KaraokeBuddy/song.mp4", -1, 20)
+    updated = lib.get(entry.id)
+
+    assert len(updated.saved_outputs) == 1
+    assert updated.saved_outputs[0].path == "C:/Videos/KaraokeBuddy/song.mp4"
+    assert updated.saved_outputs[0].pitch == -1
+    assert updated.saved_outputs[0].vocal_reduce == 20
+
+
+def test_add_saved_output_unknown_id_raises(lib):
+    with pytest.raises(KeyError, match="ghost-id"):
+        lib.add_saved_output("ghost-id", "C:/Videos/song.mp4", -1, 20)
+
+
 def test_atomic_write_uses_tmp_file(tmp_path, monkeypatch):
     path = tmp_path / "library.json"
     lib = Library(path)
@@ -116,19 +152,16 @@ def test_atomic_write_uses_tmp_file(tmp_path, monkeypatch):
     assert any(str(path) in p[1] for p in written_paths)
 
 
-def test_corrupted_json_triggers_fresh_start(tmp_path):
+def test_corrupted_json_raises_and_preserves_file(tmp_path):
     path = tmp_path / "library.json"
     path.write_text("{ not valid json !!!", encoding="utf-8")
-    lib = Library(path)
-    assert lib.list() == []
 
+    with pytest.raises(RuntimeError, match="Could not load library"):
+        Library(path)
 
-def test_corrupted_file_is_renamed(tmp_path):
-    path = tmp_path / "library.json"
-    path.write_text("CORRUPT", encoding="utf-8")
-    Library(path)
-    backups = list(tmp_path.glob("library.json.corrupted-*"))
-    assert len(backups) == 1
+    assert path.exists()
+    assert path.read_text(encoding="utf-8") == "{ not valid json !!!"
+    assert not list(tmp_path.glob("library.json.corrupted-*"))
 
 
 def test_list_is_sorted_most_recently_opened_first(lib):
