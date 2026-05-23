@@ -1,0 +1,80 @@
+name: Bug report
+description: Something doesn't work the way it should.
+title: "bug: <one-line summary>"
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report. Filling this out fully
+        roughly doubles the chance the bug gets fixed quickly.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, what happened instead?
+      placeholder: |
+        1. Pasted a YouTube URL into the home screen.
+        2. Expected: video loads and plays.
+        3. Actual: dialog said "YouTube runtime missing" and app closed.
+    validations:
+      required: true
+
+  - type: input
+    id: kb-version
+    attributes:
+      label: KaraokeBuddy version
+      description: From the title bar, the .exe filename, or `python -m karaoke_buddy --version` (if available).
+      placeholder: "v0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-type
+    attributes:
+      label: How are you running it?
+      options:
+        - Packaged Windows .exe
+        - Source on Windows (pip install -e)
+        - Source on Linux (pip install -e)
+        - Other (describe in "What happened")
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Windows 11 23H2 / Ubuntu 22.04 / etc."
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version (source installs only)
+      description: Output of `python --version`. Leave blank if using the .exe.
+      placeholder: "Python 3.12.5"
+
+  - type: input
+    id: ffmpeg-version
+    attributes:
+      label: FFmpeg version
+      description: First line of `ffmpeg -version`. Required for any export-related bug.
+      placeholder: "ffmpeg version N-115204-g..."
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Paste the relevant section of `logs/app.log` (next to the exe on Windows,
+        or in the repo root in dev). Trim to ~50 lines around the error.
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, the source URL you used, sample MP4, etc.

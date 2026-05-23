@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # Python dependencies declared in pyproject.toml.
+  # yt-dlp ships frequently to keep up with YouTube's signature scheme, so we
+  # poll daily for pip and rely on CI to catch breakage early.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+      runtime-minor-patch:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions versions used in .github/workflows/.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"
+      include: "scope"

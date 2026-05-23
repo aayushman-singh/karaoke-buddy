@@ -26,6 +26,14 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `LICENSE` (MIT) and `NOTICE.md` documenting bundled-binary licenses.
 - `CONTRIBUTING.md` with dev setup and PR guidance.
 - GitHub Actions CI: ruff + non-FFmpeg tests on every push and PR.
+- `SECURITY.md` with a coordinated-disclosure policy and contact.
+- GitHub issue templates (`bug_report.yml`, `feature_request.yml`, `config.yml`)
+  and a pull-request template.
+- `.github/CODEOWNERS`, `.github/FUNDING.yml` placeholder, and
+  `.github/dependabot.yml` (daily pip updates, weekly github-actions).
+- `.pre-commit-config.yaml` - ruff + whitespace/EOF/yaml/toml checks on every commit.
+- `justfile` for one-command workflows (`just install`, `just test`, `just build`,
+  `just smoke`, `just fmt`, `just hooks`, etc.).
 
 ## [0.1.0] - 2026-04-17
 

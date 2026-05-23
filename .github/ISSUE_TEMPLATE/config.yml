@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and discussion
+    url: https://github.com/aayushman-singh/karaoke-buddy/discussions
+    about: For "how do I..." questions, design proposals, or anything that isn't a bug or feature.
+  - name: Security report
+    url: https://github.com/aayushman-singh/karaoke-buddy/security/policy
+    about: For privately reporting a security issue - please do not file a public issue.

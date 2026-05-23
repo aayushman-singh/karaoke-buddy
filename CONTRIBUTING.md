@@ -7,6 +7,18 @@ a PR.
 
 ## Quick setup
 
+If you have [`just`](https://just.systems) installed, the one-shot path:
+
+```bash
+git clone https://github.com/aayushman-singh/karaoke-buddy.git
+cd karaoke-buddy
+python -m venv .venv && .venv\Scripts\activate   # or source .venv/bin/activate
+just install     # editable install + pre-commit hooks
+just smoke       # confirm the Qt window boots
+```
+
+Otherwise, the manual path:
+
 ```bash
 git clone https://github.com/aayushman-singh/karaoke-buddy.git
 cd karaoke-buddy
@@ -47,11 +59,29 @@ CI (see `.github/workflows/ci.yml`) runs ruff plus the non-FFmpeg test surface
 on every push and PR. Export integration tests run locally because they depend
 on the system FFmpeg build and available filters.
 
+## Pre-commit hooks
+
+`just install` sets these up for you. Manual install:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+Ruff and whitespace/EOF fixes now run automatically before every commit. To
+sweep the whole repo on demand:
+
+```bash
+pre-commit run --all-files
+# or: just hooks
+```
+
 ## Style
 
-- **Formatter / linter**: `ruff`. Run before committing:
+- **Formatter / linter**: `ruff`. Pre-commit runs this for you; manual invocation:
   ```bash
   ruff check --fix . && ruff format .
+  # or: just fmt
   ```
 - **Commit messages**: Conventional Commits (`feat:`, `fix:`, `refactor:`,
   `test:`, `docs:`, `chore:`).

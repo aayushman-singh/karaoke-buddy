@@ -1,0 +1,44 @@
+name: Feature request
+description: Propose a new capability or a meaningful change to an existing one.
+title: "feat: <one-line summary>"
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        KaraokeBuddy is opinionated and scope-limited. The strongest requests
+        describe what a singer wants to *do*, not how the code should change.
+
+  - type: textarea
+    id: user-story
+    attributes:
+      label: User story
+      description: Who needs this and what are they trying to do?
+      placeholder: |
+        As a singer practicing for a Saturday open mic, I want to slow a YouTube
+        track to 80% without changing pitch, so I can rehearse a fast bridge.
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-gap
+    attributes:
+      label: What's missing today
+      description: What does KaraokeBuddy currently do (or not do) that blocks this?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-ux
+    attributes:
+      label: Proposed UX
+      description: Sketch the interaction. Where does it live? What does the user click/drag?
+      placeholder: |
+        A second slider under "Song key" labeled "Tempo" with -50% / +50% range,
+        snapping at -25, 0, +25.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other workflows you tried (in KaraokeBuddy or elsewhere) and why they fell short.
