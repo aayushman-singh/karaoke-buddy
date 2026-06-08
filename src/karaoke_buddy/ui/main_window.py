@@ -1,6 +1,7 @@
 """MainWindow — owns all core components, wires views to business logic."""
 
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -17,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from karaoke_buddy.core import errors as kb_errors
 from karaoke_buddy.core.errors import KBError
-from karaoke_buddy.core.exporter import ExportThread
+from karaoke_buddy.core.exporter import SUPPORTED_EXPORT_SUFFIXES, ExportThread
 from karaoke_buddy.core.filter_chain import build_filter_chain
 from karaoke_buddy.core.library import Library, LibraryEntry, SavedOutput
 from karaoke_buddy.core.runtime_paths import default_export_dir
@@ -38,6 +39,24 @@ log = logging.getLogger(__name__)
 
 _HOME_IDX = 0
 _PLAYING_IDX = 1
+
+_FILTER_SUFFIX_RE = re.compile(r"\*(\.\w+)")
+
+
+def _ensure_export_suffix(path: str, selected_filter: str) -> str:
+    """Append the suffix from selected_filter when path lacks a supported one.
+
+    Qt's static getSaveFileName does not enforce the active filter's extension
+    on Linux/Windows when the user types a name without one. We honour the
+    filter the user chose so the Exporter receives a recognised suffix.
+    """
+    existing = Path(path).suffix.lower()
+    if existing in SUPPORTED_EXPORT_SUFFIXES:
+        return path
+    m = _FILTER_SUFFIX_RE.search(selected_filter)
+    if not m:
+        return path
+    return path + m.group(1)
 
 
 class _ResolveThread(QThread):
@@ -263,14 +282,23 @@ class MainWindow(QMainWindow):
         key_str = f"key {pitch:+d}" if pitch != 0 else "normal key"
         default_name = f"{self._current_entry.title} ({key_str}).mp4"
 
-        output_path, _ = QFileDialog.getSaveFileName(
+        filters = ";;".join(
+            [
+                "MP4 video (*.mp4)",
+                "M4A audio (*.m4a)",
+                "MP3 audio (*.mp3)",
+            ]
+        )
+        output_path, selected_filter = QFileDialog.getSaveFileName(
             self,
             "Save this version",
             str(default_dir / default_name),
-            "MP4 video (*.mp4)",
+            filters,
         )
         if not output_path:
             return
+
+        output_path = _ensure_export_suffix(output_path, selected_filter)
 
         chain = build_filter_chain(pitch, 0)
         cached = Path(self._current_entry.cached_path or self._current_entry.source)

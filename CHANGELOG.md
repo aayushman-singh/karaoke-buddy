@@ -6,6 +6,15 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-08
+
+### Added
+- Audio-only export: the Save dialog now offers M4A audio (`*.m4a`) and MP3
+  audio (`*.mp3`) alongside MP4 video. Pitch shift and vocal reduction are
+  baked in just like the MP4 path, so what you preview is what you save.
+- Output format is derived from the chosen file suffix; unsupported suffixes
+  fail loudly with a `ValueError` rather than silently re-encoding to MP4.
+
 ## [0.2.0] - 2026-05-23
 
 ### Fixed
@@ -58,6 +67,7 @@ Initial public release.
 - Launch smoke check: `python -m karaoke_buddy --smoke-check` boots the Qt
   window briefly to catch UI import or startup regressions in CI.
 
-[Unreleased]: https://github.com/aayushman-singh/karaoke-buddy/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/aayushman-singh/karaoke-buddy/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/aayushman-singh/karaoke-buddy/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/aayushman-singh/karaoke-buddy/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/aayushman-singh/karaoke-buddy/releases/tag/v0.1.0

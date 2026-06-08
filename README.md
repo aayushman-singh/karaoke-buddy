@@ -16,7 +16,7 @@ KaraokeBuddy replaces a fiddly manual workflow - downloading a karaoke track, sh
 - Opens a local video file or downloads a YouTube karaoke video.
 - Shifts pitch live in semitone steps without changing tempo.
 - Reduces centered guide vocals with a simple vocal-reduction control.
-- Exports the current key as a new MP4.
+- Exports the current key as a new MP4, or as audio only (`.m4a` / `.mp3`).
 - Remembers recent songs, thumbnails, saved outputs, and per-song settings.
 - Fails loudly when startup, source resolution, thumbnail generation, playback filtering, or export cannot complete, with logs written to `logs/app.log`.
 
@@ -26,7 +26,7 @@ KaraokeBuddy replaces a fiddly manual workflow - downloading a karaoke track, sh
 
 ## Download
 
-**Windows:** download [KaraokeBuddy.exe v0.2.0](https://github.com/aayushman-singh/karaoke-buddy/releases/download/v0.2.0/KaraokeBuddy.exe), then double-click it.
+**Windows:** download [KaraokeBuddy.exe v0.3.0](https://github.com/aayushman-singh/karaoke-buddy/releases/download/v0.3.0/KaraokeBuddy.exe), then double-click it.
 
 The Windows release is a portable build: no installer, no admin rights, and no separate Python, FFmpeg, or mpv install.
 

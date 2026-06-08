@@ -132,3 +132,49 @@ def test_progress_callback_receives_values(sample_video: Path, tmp_path: Path):
     Exporter().export(sample_video, chain, output, progress_callback=values.append)
     assert len(values) > 0
     assert all(0 <= v <= 100 for v in values)
+
+
+def _probe_streams(path: Path) -> list[dict]:
+    probe = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_streams",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(probe.stdout).get("streams", [])
+
+
+def test_export_m4a_produces_audio_only(sample_video: Path, tmp_path: Path):
+    chain = build_filter_chain(0, 0)
+    output = tmp_path / "output.m4a"
+
+    Exporter().export(sample_video, chain, output)
+
+    assert output.exists()
+    streams = _probe_streams(output)
+    codec_types = {s.get("codec_type") for s in streams}
+    assert codec_types == {"audio"}, f"expected audio-only, got {codec_types}"
+    audio = next(s for s in streams if s["codec_type"] == "audio")
+    assert audio["codec_name"] == "aac"
+
+
+def test_export_mp3_produces_audio_only(sample_video: Path, tmp_path: Path):
+    chain = build_filter_chain(-3, 0)
+    output = tmp_path / "output.mp3"
+
+    Exporter().export(sample_video, chain, output)
+
+    assert output.exists()
+    streams = _probe_streams(output)
+    codec_types = {s.get("codec_type") for s in streams}
+    assert codec_types == {"audio"}, f"expected audio-only, got {codec_types}"
+    audio = next(s for s in streams if s["codec_type"] == "audio")
+    assert audio["codec_name"] == "mp3"

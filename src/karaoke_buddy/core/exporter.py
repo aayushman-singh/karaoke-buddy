@@ -1,4 +1,4 @@
-"""Exporter - bakes current pitch/vocal-reduce settings into a new MP4."""
+"""Exporter - bakes current pitch/vocal-reduce settings into a new MP4 or audio file."""
 
 import logging
 import os
@@ -13,6 +13,15 @@ log = logging.getLogger(__name__)
 
 _PROGRESS_RE = re.compile(r"out_time_ms=(\d+)")
 _DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d+):(\d+)\.(\d+)")
+
+# Output format flags keyed by file suffix. Single source of truth so the
+# Exporter, the UI save dialog, and tests all agree on what is supported.
+_FORMAT_FLAGS: dict[str, list[str]] = {
+    ".mp4": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-f", "mp4"],
+    ".m4a": ["-vn", "-c:a", "aac", "-b:a", "192k", "-f", "ipod"],
+    ".mp3": ["-vn", "-c:a", "libmp3lame", "-q:a", "2", "-f", "mp3"],
+}
+SUPPORTED_EXPORT_SUFFIXES: tuple[str, ...] = tuple(_FORMAT_FLAGS.keys())
 
 
 def _parse_duration_from_stderr(stderr_head: str) -> Optional[float]:
@@ -36,10 +45,22 @@ class Exporter:
         output_path: Path,
         progress_callback: Optional[Callable[[int], None]] = None,
     ) -> None:
-        """Export input_path with filter_chain applied to output_path."""
+        """Export input_path with filter_chain applied to output_path.
+
+        Output format is derived from output_path.suffix. Supported:
+        .mp4 (video + AAC), .m4a (AAC audio only), .mp3 (MP3 audio only).
+        """
+        suffix = output_path.suffix.lower()
+        if suffix not in _FORMAT_FLAGS:
+            raise ValueError(
+                f"Unsupported export format {output_path.suffix!r}. "
+                f"Supported: {', '.join(SUPPORTED_EXPORT_SUFFIXES)}."
+            )
+        format_flags = _FORMAT_FLAGS[suffix]
+
         tmp = output_path.with_suffix(".tmp")
         try:
-            self._run(input_path, filter_chain, tmp, progress_callback, video_copy=True)
+            self._run(input_path, filter_chain, tmp, progress_callback, format_flags)
         except FileNotFoundError as exc:
             # ffmpeg binary not found; clean up and surface a plain-English error.
             if tmp.exists():
@@ -65,28 +86,16 @@ class Exporter:
         filter_chain: str,
         output_path: Path,
         progress_callback: Optional[Callable[[int], None]],
-        video_copy: bool,
+        format_flags: list[str],
     ) -> None:
-        video_flags = (
-            ["-c:v", "copy"]
-            if video_copy
-            else ["-c:v", "libx264", "-crf", "23", "-preset", "veryfast"]
-        )
-
         cmd = [
             self._ffmpeg,
             "-y",
             "-i",
             str(input_path),
-            *video_flags,
             "-af",
             filter_chain,
-            "-c:a",
-            "aac",
-            "-b:a",
-            "192k",
-            "-f",
-            "mp4",
+            *format_flags,
             "-progress",
             "pipe:1",
             str(output_path),
