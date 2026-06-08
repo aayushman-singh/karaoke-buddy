@@ -6,6 +6,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from karaoke_buddy.core._proc import HIDDEN_PROCESS_FLAGS
 from karaoke_buddy.core.runtime_paths import locate_bundled
 
 log = logging.getLogger(__name__)
@@ -77,6 +78,7 @@ def _executable_problem(label: str, executable: str | Path) -> list[str]:
             text=True,
             timeout=10,
             check=False,
+            creationflags=HIDDEN_PROCESS_FLAGS,
         )
     except Exception as exc:  # noqa: BLE001
         log.exception(

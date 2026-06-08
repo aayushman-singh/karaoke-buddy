@@ -1,7 +1,6 @@
 """MainWindow — owns all core components, wires views to business logic."""
 
 import logging
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -12,13 +11,14 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QProgressDialog,
+    QPushButton,
     QStackedWidget,
     QWidget,
 )
 
 from karaoke_buddy.core import errors as kb_errors
 from karaoke_buddy.core.errors import KBError
-from karaoke_buddy.core.exporter import SUPPORTED_EXPORT_SUFFIXES, ExportThread
+from karaoke_buddy.core.exporter import ExportThread
 from karaoke_buddy.core.filter_chain import build_filter_chain
 from karaoke_buddy.core.library import Library, LibraryEntry, SavedOutput
 from karaoke_buddy.core.runtime_paths import default_export_dir
@@ -40,23 +40,53 @@ log = logging.getLogger(__name__)
 _HOME_IDX = 0
 _PLAYING_IDX = 1
 
-_FILTER_SUFFIX_RE = re.compile(r"\*(\.\w+)")
+_EXPORT_FORMATS: list[tuple[str, str, str]] = [
+    (".mp4", "MP4 video", "Keeps the karaoke video on screen."),
+    (".m4a", "M4A audio", "Audio only — small file, plays everywhere modern."),
+    (".mp3", "MP3 audio", "Audio only — works on older phones and car stereos."),
+]
 
 
-def _ensure_export_suffix(path: str, selected_filter: str) -> str:
-    """Append the suffix from selected_filter when path lacks a supported one.
+def _ensure_export_suffix(path: str, suffix: str) -> str:
+    """Append `suffix` to `path` if it is missing.
 
-    Qt's static getSaveFileName does not enforce the active filter's extension
-    on Linux/Windows when the user types a name without one. We honour the
-    filter the user chose so the Exporter receives a recognised suffix.
+    The Save dialog is launched scoped to a single format, but Qt's static
+    getSaveFileName does not enforce the active filter's extension when the
+    user types a name without one. This keeps the Exporter's suffix contract
+    satisfied without surprising the user with a different extension than the
+    one they picked.
     """
-    existing = Path(path).suffix.lower()
-    if existing in SUPPORTED_EXPORT_SUFFIXES:
+    if Path(path).suffix.lower() == suffix.lower():
         return path
-    m = _FILTER_SUFFIX_RE.search(selected_filter)
-    if not m:
-        return path
-    return path + m.group(1)
+    return path + suffix
+
+
+def _ask_export_format(parent: QWidget) -> Optional[str]:
+    """Modal asking the user which container/codec to export to.
+
+    Returns the chosen suffix (one of SUPPORTED_EXPORT_SUFFIXES) or None if
+    the user cancelled. The OS file-dialog's filter dropdown is buried in
+    its chrome and easy to miss, so we surface the choice as a first-class
+    in-app decision instead.
+    """
+    box = QMessageBox(parent)
+    box.setWindowTitle("Save as…")
+    box.setIcon(QMessageBox.Icon.Question)
+    box.setText("How would you like to save this version?")
+    box.setInformativeText(
+        "Pick a format. Pitch shift and vocal reduction are baked in either way."
+    )
+    buttons: dict[QPushButton, str] = {}
+    for suffix, label, _description in _EXPORT_FORMATS:
+        btn = box.addButton(label, QMessageBox.ButtonRole.AcceptRole)
+        buttons[btn] = suffix
+    cancel = box.addButton(QMessageBox.StandardButton.Cancel)
+    box.setDefaultButton(next(iter(buttons)))
+    box.exec()
+    clicked = box.clickedButton()
+    if clicked is cancel or clicked is None:
+        return None
+    return buttons.get(clicked)  # type: ignore[arg-type]
 
 
 class _ResolveThread(QThread):
@@ -276,29 +306,31 @@ class MainWindow(QMainWindow):
         if not self._current_entry:
             return
 
+        chosen_suffix = _ask_export_format(self)
+        if chosen_suffix is None:
+            return
+
         default_dir = default_export_dir()
         default_dir.mkdir(parents=True, exist_ok=True)
 
         key_str = f"key {pitch:+d}" if pitch != 0 else "normal key"
-        default_name = f"{self._current_entry.title} ({key_str}).mp4"
-
-        filters = ";;".join(
-            [
-                "MP4 video (*.mp4)",
-                "M4A audio (*.m4a)",
-                "MP3 audio (*.mp3)",
-            ]
+        default_name = f"{self._current_entry.title} ({key_str}){chosen_suffix}"
+        filter_label = next(
+            f"{label} (*{suffix})"
+            for suffix, label, _ in _EXPORT_FORMATS
+            if suffix == chosen_suffix
         )
-        output_path, selected_filter = QFileDialog.getSaveFileName(
+
+        output_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save this version",
             str(default_dir / default_name),
-            filters,
+            filter_label,
         )
         if not output_path:
             return
 
-        output_path = _ensure_export_suffix(output_path, selected_filter)
+        output_path = _ensure_export_suffix(output_path, chosen_suffix)
 
         chain = build_filter_chain(pitch, 0)
         cached = Path(self._current_entry.cached_path or self._current_entry.source)
