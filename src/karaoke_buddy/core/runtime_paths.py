@@ -56,14 +56,20 @@ def dev_binary_dir(base_dir: Path) -> Path | None:
     return dev_bin if dev_bin.is_dir() else None
 
 
-def default_export_dir() -> Path:
-    """User-facing default folder for exported MP4s.
+_AUDIO_SUFFIXES = frozenset({".mp3", ".m4a"})
 
-    Resolves to ``~/Videos/KaraokeBuddy``. On Windows this is the standard
-    Videos shell folder; on Linux it matches the XDG ``VIDEOS`` default. The
-    folder is created lazily by the caller on first export.
+
+def default_export_dir(suffix: str = ".mp4") -> Path:
+    """User-facing default folder for an export of the given suffix.
+
+    Audio files (``.mp3``, ``.m4a``) resolve to ``~/Music/KaraokeBuddy``;
+    everything else (``.mp4`` today) resolves to ``~/Videos/KaraokeBuddy``.
+    On Windows these are the standard Music and Videos shell folders; on
+    Linux they match the XDG ``MUSIC`` and ``VIDEOS`` defaults. The folder
+    is created lazily by the caller on first export.
     """
-    return Path.home() / "Videos" / "KaraokeBuddy"
+    bucket = "Music" if suffix.lower() in _AUDIO_SUFFIXES else "Videos"
+    return Path.home() / bucket / "KaraokeBuddy"
 
 
 def runtime_binary_dirs(base_dir: Path | None = None) -> list[Path]:

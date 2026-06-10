@@ -6,6 +6,22 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `default_export_dir(suffix)` now routes audio outputs (`.mp3`, `.m4a`) to
+  `~/Music/KaraokeBuddy/` and video outputs to `~/Videos/KaraokeBuddy/`,
+  matching the standard Music and Videos shell folders on Windows and the
+  XDG defaults on Linux. No-arg call still resolves to Videos for backward
+  compatibility.
+
+### Changed
+- Save flow now opens an in-app modal asking AUDIO vs VIDEO instead of
+  burying the format choice in the OS file dialog's filter dropdown. The
+  modal also exposes an MP3 / M4A picker for users who want to pick the
+  audio codec explicitly.
+- All shelled binaries (ffmpeg, ffprobe, deno) launch with
+  `CREATE_NO_WINDOW` on Windows, so saving / loading no longer flashes a
+  black console window. Centralised in `core/_proc.py`.
+
 ## [0.3.0] - 2026-06-08
 
 ### Added

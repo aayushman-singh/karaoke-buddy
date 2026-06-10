@@ -9,6 +9,8 @@ from typing import Callable, Optional
 
 from PySide6.QtCore import QThread, Signal
 
+from karaoke_buddy.core._proc import HIDDEN_PROCESS_FLAGS
+
 log = logging.getLogger(__name__)
 
 _PROGRESS_RE = re.compile(r"out_time_ms=(\d+)")
@@ -106,6 +108,7 @@ class Exporter:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            creationflags=HIDDEN_PROCESS_FLAGS,
         )
 
         duration_s: Optional[float] = None

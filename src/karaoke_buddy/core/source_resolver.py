@@ -13,6 +13,7 @@ from typing import Callable, Optional
 
 import yt_dlp
 
+from karaoke_buddy.core._proc import HIDDEN_PROCESS_FLAGS
 from karaoke_buddy.core.runtime_paths import (
     resolve_deno_executable,
     resolve_ffprobe_executable,
@@ -128,6 +129,7 @@ def youtube_extraction_options(*, quiet: bool = True) -> dict:
             capture_output=True,
             text=True,
             check=True,
+            creationflags=HIDDEN_PROCESS_FLAGS,
         ).stdout.splitlines()[0]
     except Exception as exc:  # noqa: BLE001
         raise YouTubeRuntimeDependencyError(
@@ -299,6 +301,7 @@ class SourceResolver:
                 text=True,
                 check=True,
                 timeout=30,
+                creationflags=HIDDEN_PROCESS_FLAGS,
             )
         except subprocess.CalledProcessError as exc:
             log.error(
@@ -346,6 +349,7 @@ class SourceResolver:
             ],
             capture_output=True,
             check=True,
+            creationflags=HIDDEN_PROCESS_FLAGS,
         )
 
     def _ensure_thumbnail(self, video: Path, out: Path) -> Path:
