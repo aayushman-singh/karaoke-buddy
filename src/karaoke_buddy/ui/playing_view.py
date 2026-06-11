@@ -39,21 +39,30 @@ def _pitch_label(semitones: int) -> str:
     return f"{direction} by {abs_s} {word}"
 
 
+def _vocal_label(percent: int) -> str:
+    if percent == 0:
+        return "Singer at full volume"
+    if percent >= 100:
+        return "Singer almost gone"
+    return f"Singer turned down {percent}%"
+
+
 class PlayingView(QWidget):
     filter_changed = Signal(str)
     seek_requested = Signal(float)
     play_pause_toggled = Signal()
     volume_changed = Signal(int)
     speed_changed = Signal(float)
-    save_requested = Signal(int)
+    save_requested = Signal(int, int)
     back_to_library = Signal()
-    settings_changed = Signal(int)
+    settings_changed = Signal(int, int)
     fullscreen_toggled = Signal(bool)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._pitch = 0
+        self._vocal_reduce = 0
         self._duration = 0.0
         self._paused = True
         self._fullscreen = False
@@ -84,7 +93,9 @@ class PlayingView(QWidget):
         self._settings_debounce = QTimer(self)
         self._settings_debounce.setSingleShot(True)
         self._settings_debounce.setInterval(800)
-        self._settings_debounce.timeout.connect(lambda: self.settings_changed.emit(self._pitch))
+        self._settings_debounce.timeout.connect(
+            lambda: self.settings_changed.emit(self._pitch, self._vocal_reduce)
+        )
 
     def _build_header(self) -> QWidget:
         header = QWidget()
@@ -209,6 +220,26 @@ class PlayingView(QWidget):
         self._pitch_label.setStyleSheet("color: #aaa;")
         layout.addWidget(self._pitch_label)
 
+        vocal_section = QLabel("Silence the singer")
+        vocal_section.setStyleSheet("font-weight: bold; color: #ddd; font-size: 13px;")
+        layout.addWidget(vocal_section)
+
+        vocal_row = QHBoxLayout()
+        vocal_row.addWidget(QLabel("Off"))
+        self._vocal_slider = ClickJumpSlider(Qt.Orientation.Horizontal)
+        self._vocal_slider.setRange(0, 100)
+        self._vocal_slider.setValue(0)
+        self._vocal_slider.setSingleStep(5)
+        self._vocal_slider.valueChanged.connect(self._on_vocal_changed)
+        vocal_row.addWidget(self._vocal_slider, stretch=1)
+        vocal_row.addWidget(QLabel("Max"))
+        layout.addLayout(vocal_row)
+
+        self._vocal_label = QLabel("Singer at full volume")
+        self._vocal_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._vocal_label.setStyleSheet("color: #aaa;")
+        layout.addWidget(self._vocal_label)
+
         self._save_btn = QPushButton("\U0001f4be  Save this version")
         self._save_btn.setFixedHeight(44)
         self._save_btn.setStyleSheet(
@@ -234,6 +265,7 @@ class PlayingView(QWidget):
 
     def load_entry(self, entry: LibraryEntry) -> None:
         self._pitch_slider.setValue(entry.last_pitch)
+        self._vocal_slider.setValue(entry.last_vocal_reduce)
 
     def update_time(self, seconds: float) -> None:
         self._time_label.setText(format_time(seconds))
@@ -265,7 +297,7 @@ class PlayingView(QWidget):
                 return
 
     def current_filter(self) -> str:
-        return build_mpv_filter_chain(self._pitch)
+        return build_mpv_filter_chain(self._pitch, self._vocal_reduce)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:  # type: ignore[override]
         if event.key() == Qt.Key.Key_Escape and self._fullscreen:
@@ -292,11 +324,17 @@ class PlayingView(QWidget):
         self._debounce.start()
         self._settings_debounce.start()
 
+    def _on_vocal_changed(self, value: int) -> None:
+        self._vocal_reduce = value
+        self._vocal_label.setText(_vocal_label(value))
+        self._debounce.start()
+        self._settings_debounce.start()
+
     def _on_save(self) -> None:
-        self.save_requested.emit(self._pitch)
+        self.save_requested.emit(self._pitch, self._vocal_reduce)
 
     def _emit_filter(self) -> None:
-        self.filter_changed.emit(build_mpv_filter_chain(self._pitch))
+        self.filter_changed.emit(build_mpv_filter_chain(self._pitch, self._vocal_reduce))
 
     def _toggle_fullscreen(self) -> None:
         self._set_fullscreen(not self._fullscreen)

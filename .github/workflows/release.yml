@@ -21,12 +21,12 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: '3.12'
           cache: pip
@@ -85,7 +85,7 @@ jobs:
           sha256sum build/dist/KaraokeBuddy.exe
 
       - name: Upload build artifact (for dispatch runs and debugging)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: KaraokeBuddy-windows
           path: build/dist/KaraokeBuddy.exe
@@ -93,7 +93,7 @@ jobs:
           retention-days: 30
 
       - name: Attach EXE to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: build/dist/KaraokeBuddy.exe

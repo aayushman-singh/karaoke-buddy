@@ -7,18 +7,22 @@ on:
     branches: [main]
 
 jobs:
+  # Ubuntu is the authoritative gate: it must pass for the build to be green.
   lint-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        # Windows runners ship Qt platform plugins, so the offscreen smoke
+        # path works there too. Both Linux and Windows are hard gates.
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.11", "3.12"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -38,6 +42,145 @@ jobs:
         # Export integration tests depend on the runner's FFmpeg build and
         # available filters. Everything else, including the Qt launch smoke
         # path, should be deterministic in CI.
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest --ignore=tests/test_exporter.py -v
+
+  # THIS IS THE JOB THAT PROVES THE ARCHITECTURE'S HEADLINE CLAIM.
+  #
+  # The README asserts "preview == export": the live mpv native-rubberband
+  # pitch/vocal filter chain and the FFmpeg lavfi rubberband export chain
+  # produce acoustically identical audio. tests/test_preview_export_equivalence.py
+  # renders a known clip through BOTH real binaries and compares spectra — but it
+  # SKIPS itself when ffmpeg/mpv/numpy are absent. This job installs all three so
+  # the test's own shutil.which/importorskip gates are satisfied and it actually
+  # RUNS, then it fails loudly if the test skipped anyway. This is a required gate
+  # (it runs on the same push/PR-to-main triggers as the rest of the build).
+  equivalence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install mpv (apt)
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y mpv
+
+      - name: Install a rubberband-enabled ffmpeg
+        # Ubuntu's apt ffmpeg does NOT include --enable-librubberband, so the
+        # export chain's `rubberband=pitch=...` filter is unavailable there.
+        # We deterministically install a johnvansickle static ffmpeg build
+        # (compiled with librubberband) and put it on PATH ahead of apt's.
+        # This is fixed setup infra, NOT a runtime fallback: the next step
+        # asserts rubberband is present and fails the job if it is not.
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/ffmpeg-static"
+          cd "$HOME/ffmpeg-static"
+          curl -fsSL -o ffmpeg.tar.xz \
+            https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+          tar --strip-components=1 -xJf ffmpeg.tar.xz
+          echo "$HOME/ffmpeg-static" >> "$GITHUB_PATH"
+
+      - name: Verify ffmpeg AND mpv expose the rubberband filter
+        # Hard precondition for the equivalence proof: both pipelines must
+        # actually have rubberband, or the test would compare the wrong thing.
+        # Fail loudly with a clear message if either is missing.
+        run: |
+          set -euo pipefail
+          echo "ffmpeg: $(command -v ffmpeg)"
+          ffmpeg -hide_banner -version | head -1
+          if ! ffmpeg -hide_banner -filters | grep -q rubberband; then
+            echo "::error::ffmpeg on PATH lacks the rubberband filter; the export pipeline cannot run." >&2
+            exit 1
+          fi
+          echo "mpv: $(command -v mpv)"
+          if ! mpv --af=help 2>/dev/null | grep -q rubberband; then
+            echo "::error::mpv lacks the rubberband audio filter; the live preview pipeline cannot run." >&2
+            exit 1
+          fi
+          echo "rubberband present in both ffmpeg and mpv."
+
+      - name: Install dependencies (incl. numpy for the spectral comparison)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install numpy
+
+      - name: Run the preview/export equivalence test (must NOT skip)
+        # All three deps (ffmpeg+rubberband, mpv+rubberband, numpy) are now
+        # guaranteed installed, so the test's skip gates are satisfied and it
+        # runs for real. We capture the summary and treat ANY skip as a failure:
+        # a skip here means a dep regressed silently, which would let the
+        # headline claim go unproven. -o addopts="" neutralizes any repo-level
+        # addopts; -rs surfaces skip reasons in the summary if one occurs.
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euo pipefail
+          pytest tests/test_preview_export_equivalence.py -v -rs -o addopts="" \
+            | tee equivalence_pytest.log
+          if grep -Eq '[0-9]+ skipped' equivalence_pytest.log; then
+            echo "::error::Equivalence test skipped despite ffmpeg/mpv/numpy being installed — the 'preview == export' claim was NOT proven." >&2
+            exit 1
+          fi
+          echo "Equivalence test ran and passed: preview == export is proven."
+
+  # Pins the bytes of the vendored SoundTouchJS dist. A tampered or accidentally
+  # re-vendored file changes its sha256 and fails `sha256sum -c`, breaking CI.
+  verify-vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Verify vendored SoundTouchJS integrity
+        working-directory: apps/web-demo/vendor/soundtouchjs
+        run: |
+          set -euo pipefail
+          sha256sum -c SHA256SUMS
+
+  # macOS is listed as untested by the project, so this job is best-effort:
+  # we attempt the full non-FFmpeg suite but never let it block the build
+  # (continue-on-error). It documents an honest "attempted, not a hard gate".
+  macos-smoke:
+    runs-on: macos-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install media tooling (best-effort)
+        run: brew install mpv ffmpeg
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Run non-FFmpeg tests
         env:
           QT_QPA_PLATFORM: offscreen
         run: pytest --ignore=tests/test_exporter.py -v

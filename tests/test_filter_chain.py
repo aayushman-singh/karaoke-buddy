@@ -20,6 +20,55 @@ def test_mpv_three_semitones_up():
     assert chain == "rubberband=pitch-scale=1.189207"
 
 
+def test_mpv_zero_vocal_reduce_is_pitch_only_unchanged():
+    """0% vocal reduce must yield the exact pitch-only string (no regression)."""
+    assert build_mpv_filter_chain(3, 0) == build_mpv_filter_chain(3)
+    assert build_mpv_filter_chain(3, 0) == "rubberband=pitch-scale=1.189207"
+
+
+def test_mpv_vocal_reduce_adds_lavfi_pan():
+    chain = build_mpv_filter_chain(2, 60)
+    assert chain == (
+        "rubberband=pitch-scale=1.122462,lavfi=[pan=stereo|c0=c0-0.3000*c1|c1=c1-0.3000*c0]"
+    )
+
+
+@pytest.mark.parametrize("pct", range(0, 101, 5))
+def test_mpv_pan_mirrors_export_pan_byte_for_byte(pct):
+    """The mpv lavfi pan must contain build_filter_chain's pan substring exactly.
+
+    This is what makes preview == export for vocal reduction: the centre-channel
+    subtraction emitted to mpv (via the lavfi bridge) must be identical to the
+    one ffmpeg bakes into the export.
+    """
+    export_pan = build_filter_chain(0, pct).split(",", 1)[1]  # drop rubberband stage
+    mpv_chain = build_mpv_filter_chain(0, pct)
+    if pct == 0:
+        # 0% -> pitch-only string, no pan stage at all.
+        assert mpv_chain == "rubberband=pitch-scale=1.000000"
+    else:
+        assert f"lavfi=[{export_pan}]" in mpv_chain
+        assert mpv_chain.endswith(f",lavfi=[{export_pan}]")
+
+
+@given(
+    semitones=st.integers(min_value=-12, max_value=12),
+    vocal_reduce=st.integers(min_value=1, max_value=100),
+)
+def test_property_mpv_pan_equals_export_pan(semitones, vocal_reduce):
+    """For any non-zero reduction, mpv's lavfi pan == export's pan substring."""
+    export_pan = build_filter_chain(semitones, vocal_reduce).split(",", 1)[1]
+    mpv_chain = build_mpv_filter_chain(semitones, vocal_reduce)
+    assert mpv_chain.endswith(f",lavfi=[{export_pan}]")
+
+
+@given(semitones=st.integers(min_value=-12, max_value=12))
+def test_property_mpv_zero_vocal_is_pitch_only(semitones):
+    """0% reduction never emits a pan stage, for any pitch."""
+    assert build_mpv_filter_chain(semitones, 0) == build_mpv_filter_chain(semitones)
+    assert "lavfi" not in build_mpv_filter_chain(semitones, 0)
+
+
 def test_zero_pitch_zero_vocal_has_unity_pitch():
     chain = build_filter_chain(0, 0)
     assert "rubberband=pitch=1.000000" in chain

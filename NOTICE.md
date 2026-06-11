@@ -39,6 +39,24 @@ FFmpeg portion. The KaraokeBuddy source code remains MIT-licensed and can be
 combined with non-GPL FFmpeg builds (e.g. LGPL FFmpeg) if you build your own
 distribution.
 
+## Browser web demo (`apps/web-demo/`)
+
+The static browser demo vendors one third-party library, checked into this
+repository under `apps/web-demo/vendor/`:
+
+| Component    | License      | Project                                  |
+| ------------ | ------------ | ---------------------------------------- |
+| SoundTouchJS | LGPL v2.1    | https://github.com/cutterbl/SoundTouchJS |
+
+SoundTouchJS is used unmodified and is shipped as **human-readable JavaScript
+source** (the LGPL "source form"), so a recipient can study, modify, and
+replace it: swap the file under `apps/web-demo/vendor/soundtouchjs/` for their
+own build and the demo picks it up. `SHA256SUMS` in that directory pins the
+exact vendored bytes (verified in CI), and `vendor/soundtouchjs/README.md`
+records the upstream version and `npm` provenance. The demo deliberately does
+**not** ship a GPL component such as `ffmpeg.wasm`, so the hosted site carries
+no GPL obligation.
+
 ## Attribution
 
 Full license texts for these components are available at the project URLs
