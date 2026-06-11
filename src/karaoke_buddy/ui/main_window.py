@@ -60,6 +60,7 @@ QFrame#FmtCard {{
     background: {theme.SURFACE}; border: 2px solid {theme.LINE_2}; border-radius: 14px;
 }}
 QFrame#FmtCard:hover {{ border-color: {theme.CORAL}; }}
+QFrame#FmtCard:focus {{ border-color: {theme.CORAL}; }}
 QLabel#FmtIcon {{ background: {theme.CORAL_SOFT}; border-radius: 14px; }}
 QLabel#FmtDesc {{ color: {theme.INK_2}; font-size: 13px; font-weight: 600; }}
 QLabel#FmtSubLbl {{ color: {theme.INK_3}; font-size: 11px; font-weight: 800; }}
@@ -97,6 +98,11 @@ class _FormatCard(QFrame):
         self.setObjectName("FmtCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._on_commit = on_commit
+        # Keyboard parity with the QMessageBox buttons this card replaced: tab
+        # focus + Enter/Space commits the save, announced as a button.
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(title)
+        self.setAccessibleDescription(description)
 
         col = QVBoxLayout(self)
         col.setContentsMargins(20, 20, 20, 20)
@@ -137,6 +143,17 @@ class _FormatCard(QFrame):
             event.accept()
             return
         super().mousePressEvent(event)
+
+    def keyPressEvent(self, event) -> None:  # type: ignore[override]
+        if event.key() in (
+            Qt.Key.Key_Return,
+            Qt.Key.Key_Enter,
+            Qt.Key.Key_Space,
+        ):
+            self._on_commit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
 
 class _SaveFormatDialog(QDialog):
@@ -203,6 +220,9 @@ class _SaveFormatDialog(QDialog):
         cancel.clicked.connect(self.reject)
         actions.addWidget(cancel)
         root.addLayout(actions)
+
+        # Land keyboard focus on a commit control, not the Cancel button.
+        audio_card.setFocus()
 
     def _commit_audio(self) -> None:
         self.chosen = self._audio_combo.currentData()

@@ -148,6 +148,7 @@ class PlayingView(QWidget):
         self._play_btn.setIcon(theme.icon("play", "#FFFFFF", 24))
         self._play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._play_btn.setToolTip("Play / pause (Space)")
+        self._play_btn.setAccessibleName("Play / pause")
         self._play_btn.clicked.connect(self.play_pause_toggled.emit)
         transport_row.addWidget(self._play_btn)
 

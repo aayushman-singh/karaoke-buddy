@@ -275,10 +275,12 @@ QLabel#BrandMark {{ background: {CORAL}; border-radius: 18px; }}
 QLabel#BrandTag {{ background: transparent; }}
 
 /* ---- home: big action buttons ---- */
-QFrame#BigPrimary {{ background: {CORAL}; border: none; border-radius: 14px; }}
-QFrame#BigPrimary:hover {{ background: {CORAL_DEEP}; }}
-QFrame#BigGhost {{ background: {SURFACE}; border: 2px solid {LINE_2}; border-radius: 14px; }}
+QFrame#BigPrimary {{ background: {CORAL}; border: 3px solid {CORAL}; border-radius: 14px; }}
+QFrame#BigPrimary:hover {{ background: {CORAL_DEEP}; border-color: {CORAL_DEEP}; }}
+QFrame#BigPrimary:focus {{ border-color: {INK}; }}
+QFrame#BigGhost {{ background: {SURFACE}; border: 3px solid {LINE_2}; border-radius: 14px; }}
 QFrame#BigGhost:hover {{ border-color: {CORAL}; }}
+QFrame#BigGhost:focus {{ border-color: {CORAL}; }}
 QFrame#BigPrimary QLabel {{ background: transparent; color: #fff; }}
 QFrame#BigPrimary QLabel#BigIconChip {{ background: rgba(255,255,255,0.20); border-radius: 12px; }}
 QFrame#BigGhost QLabel#BigIconChip {{ background: {GOLD_SOFT}; border-radius: 12px; }}

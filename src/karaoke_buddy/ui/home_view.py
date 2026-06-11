@@ -76,6 +76,11 @@ class _BigButton(QFrame):
         self.setObjectName("BigPrimary" if primary else "BigGhost")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumHeight(84)
+        # Keyboard parity with the QPushButton this card replaced: tab focus +
+        # Enter/Space activation, announced to screen readers as a button.
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(title)
+        self.setAccessibleDescription(subtitle)
 
         row = QHBoxLayout(self)
         row.setContentsMargins(18, 16, 18, 16)
@@ -106,6 +111,17 @@ class _BigButton(QFrame):
             event.accept()
             return
         super().mousePressEvent(event)
+
+    def keyPressEvent(self, event) -> None:  # type: ignore[override]
+        if event.key() in (
+            Qt.Key.Key_Return,
+            Qt.Key.Key_Enter,
+            Qt.Key.Key_Space,
+        ):
+            self.clicked.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
 
 class _PasteDialog(QDialog):
