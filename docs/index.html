@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KaraokeBuddy — Sing any karaoke video in your own key</title>
+  <meta name="description" content="KaraokeBuddy shifts pitch and reduces vocals on any karaoke video, then exports in one click. Windows desktop app plus a browser demo." />
+  <meta name="color-scheme" content="dark" />
+  <style>
+    :root {
+      --bg: #0a0b10;
+      --bg-elev: #12141d;
+      --bg-card: #161824;
+      --line: #242838;
+      --text: #e8eaf2;
+      --muted: #9aa0b5;
+      --faint: #6b7187;
+      --accent: #ff4d6d;
+      --accent-soft: rgba(255, 77, 109, 0.14);
+      --radius: 16px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+        Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    .wrap {
+      width: 100%;
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ---- Decorative background glow ---- */
+    .stage {
+      position: relative;
+      overflow: hidden;
+    }
+    .stage::before {
+      content: "";
+      position: absolute;
+      inset: -40% 0 auto 0;
+      height: 720px;
+      background:
+        radial-gradient(60% 60% at 50% 0%, var(--accent-soft), transparent 70%),
+        radial-gradient(40% 40% at 85% 10%, rgba(90, 120, 255, 0.10), transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ---- Header ---- */
+    header {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 22px 0;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      font-size: 1.08rem;
+    }
+    .brand .mark {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(150deg, var(--accent), #ff7a3d);
+      box-shadow: 0 6px 20px rgba(255, 77, 109, 0.35);
+    }
+    nav.top {
+      display: flex;
+      align-items: center;
+      gap: 26px;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+    nav.top a:hover { color: var(--text); }
+    @media (max-width: 640px) { nav.top { display: none; } }
+
+    /* ---- Hero ---- */
+    .hero {
+      position: relative;
+      z-index: 2;
+      padding: 64px 0 84px;
+      text-align: center;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 13px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg-elev);
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 500;
+      margin-bottom: 26px;
+    }
+    .eyebrow .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+    }
+    .hero h1 {
+      margin: 0 auto 18px;
+      max-width: 14ch;
+      font-size: clamp(2.4rem, 6vw, 4.2rem);
+      line-height: 1.04;
+      letter-spacing: -0.03em;
+      font-weight: 800;
+    }
+    .hero h1 .grad {
+      background: linear-gradient(120deg, var(--accent), #ff9a5a);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .hero p.lede {
+      margin: 0 auto 36px;
+      max-width: 52ch;
+      font-size: clamp(1.05rem, 2.2vw, 1.28rem);
+      color: var(--muted);
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      justify-content: center;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 24px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 1rem;
+      border: 1px solid transparent;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+    .btn svg { width: 18px; height: 18px; }
+    .btn-primary {
+      background: linear-gradient(150deg, var(--accent), #ff6a45);
+      color: #fff;
+      box-shadow: 0 10px 30px rgba(255, 77, 109, 0.32);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 38px rgba(255, 77, 109, 0.42); }
+    .btn-ghost {
+      background: var(--bg-card);
+      border-color: var(--line);
+      color: var(--text);
+    }
+    .btn-ghost:hover { transform: translateY(-2px); border-color: #39405a; }
+    .hint {
+      margin-top: 18px;
+      font-size: 0.86rem;
+      color: var(--faint);
+    }
+
+    /* ---- Section scaffold ---- */
+    section { position: relative; z-index: 1; }
+    .section-pad { padding: 72px 0; }
+    .section-head { text-align: center; margin-bottom: 44px; }
+    .section-head h2 {
+      margin: 0 0 12px;
+      font-size: clamp(1.7rem, 3.4vw, 2.3rem);
+      letter-spacing: -0.02em;
+      font-weight: 750;
+    }
+    .section-head p {
+      margin: 0 auto;
+      max-width: 50ch;
+      color: var(--muted);
+    }
+
+    /* ---- Feature trio ---- */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+    @media (max-width: 800px) { .features { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 28px 26px;
+      transition: border-color 0.18s ease, transform 0.18s ease;
+    }
+    .card:hover { border-color: #353c54; transform: translateY(-3px); }
+    .card .ico {
+      display: grid;
+      place-items: center;
+      width: 46px; height: 46px;
+      border-radius: 12px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      margin-bottom: 18px;
+    }
+    .card .ico svg { width: 24px; height: 24px; }
+    .card h3 { margin: 0 0 8px; font-size: 1.18rem; letter-spacing: -0.01em; }
+    .card p { margin: 0; color: var(--muted); font-size: 0.96rem; }
+
+    /* ---- Engine note ---- */
+    .engine {
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 36px 34px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+    }
+    @media (max-width: 720px) { .engine { grid-template-columns: 1fr; } }
+    .engine .col h3 {
+      display: flex; align-items: center; gap: 9px;
+      margin: 0 0 10px; font-size: 1.1rem;
+    }
+    .engine .col p { margin: 0; color: var(--muted); font-size: 0.96rem; }
+    .pill {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 6px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .pill.alt { background: rgba(90, 120, 255, 0.14); color: #8aa0ff; }
+
+    /* ---- Footer ---- */
+    footer {
+      border-top: 1px solid var(--line);
+      margin-top: 24px;
+      padding: 40px 0 56px;
+    }
+    .foot-grid {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+    .foot-links { display: flex; gap: 22px; color: var(--muted); font-size: 0.94rem; }
+    .foot-links a:hover { color: var(--text); }
+    .foot-note {
+      margin-top: 22px;
+      color: var(--faint);
+      font-size: 0.82rem;
+      max-width: 70ch;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div class="wrap">
+      <header>
+        <div class="brand">
+          <span class="mark" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+            </svg>
+          </span>
+          KaraokeBuddy
+        </div>
+        <nav class="top">
+          <a href="#features">Features</a>
+          <a href="#engine">Engine</a>
+          <a href="https://github.com/aayushman-singh/karaoke-buddy">GitHub</a>
+        </nav>
+      </header>
+
+      <main class="hero">
+        <span class="eyebrow"><span class="dot"></span> Open source · MIT-licensed code</span>
+        <h1>Sing any karaoke video <span class="grad">in your own key</span></h1>
+        <p class="lede">
+          KaraokeBuddy re-pitches and softens the vocals on any karaoke track,
+          then exports a clean file in one click. No subscriptions, no uploads —
+          it runs right on your machine.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/aayushman-singh/karaoke-buddy/releases/download/v0.3.0/KaraokeBuddy.exe">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download for Windows
+          </a>
+          <a class="btn btn-ghost" href="demo/">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            Try the web demo
+          </a>
+        </div>
+        <p class="hint">Windows 10/11 · v0.3.0 · The web demo runs in any modern browser</p>
+      </main>
+    </div>
+  </div>
+
+  <section id="features" class="section-pad">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>What it does</h2>
+        <p>Three moves that turn a YouTube-style karaoke clip into something you can actually sing along to.</p>
+      </div>
+      <div class="features">
+        <article class="card">
+          <span class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="20" x2="12" y2="10" />
+              <line x1="6" y1="20" x2="6" y2="4" />
+              <line x1="18" y1="20" x2="18" y2="14" />
+            </svg>
+          </span>
+          <h3>Pitch shift</h3>
+          <p>Nudge the whole song up or down by semitones so the melody lands in your comfortable range — tempo stays untouched.</p>
+        </article>
+        <article class="card">
+          <span class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <line x1="23" y1="9" x2="17" y2="15" />
+              <line x1="17" y1="9" x2="23" y2="15" />
+            </svg>
+          </span>
+          <h3>Vocal reduction</h3>
+          <p>Pull down a leftover guide vocal so the lead voice steps back and the room is yours to fill.</p>
+        </article>
+        <article class="card">
+          <span class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          </span>
+          <h3>One-click export</h3>
+          <p>Render the adjusted track to MP4 video or MP3/M4A audio — ready for the party, the practice room, or the road.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="engine" class="section-pad">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Two ways to run it</h2>
+        <p>Same idea, two engines. Grab the desktop app for the full quality, or poke at the demo without installing a thing.</p>
+      </div>
+      <div class="engine">
+        <div class="col">
+          <h3><span class="pill">Desktop</span> The full engine</h3>
+          <p>
+            The Windows app does the real work: studio-grade pitch shifting
+            powered by <strong>Rubber Band</strong>, with bundled FFmpeg and mpv
+            for clean playback and export. This is the one to install.
+          </p>
+        </div>
+        <div class="col">
+          <h3><span class="pill alt">Browser</span> A quick preview</h3>
+          <p>
+            The web demo is a lightweight browser preview built on
+            <strong>SoundTouch / WSOLA</strong>. It is great for a fast taste of
+            the controls — the desktop app is where the quality lives.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="foot-grid">
+        <div class="brand">
+          <span class="mark" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+            </svg>
+          </span>
+          KaraokeBuddy
+        </div>
+        <nav class="foot-links">
+          <a href="https://github.com/aayushman-singh/karaoke-buddy">GitHub</a>
+          <a href="https://github.com/aayushman-singh/karaoke-buddy/releases">Releases</a>
+          <a href="demo/">Web demo</a>
+        </nav>
+      </div>
+      <p class="foot-note">
+        KaraokeBuddy's source code is MIT-licensed. The distributed Windows
+        <code>.exe</code> bundles third-party binaries — notably a GPL build of
+        FFmpeg (with Rubber Band) and libmpv — which carry their own GPL/LGPL
+        terms, so the bundled download as a whole is governed by those licenses.
+        Full attribution in
+        <a href="https://github.com/aayushman-singh/karaoke-buddy/blob/main/NOTICE.md">NOTICE.md</a>.
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

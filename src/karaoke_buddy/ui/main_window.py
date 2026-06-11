@@ -6,13 +6,20 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
     QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
     QPushButton,
     QStackedWidget,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -20,7 +27,7 @@ from karaoke_buddy.core import errors as kb_errors
 from karaoke_buddy.core.errors import KBError
 from karaoke_buddy.core.exporter import ExportThread
 from karaoke_buddy.core.filter_chain import build_filter_chain
-from karaoke_buddy.core.library import Library, LibraryEntry, SavedOutput
+from karaoke_buddy.core.library import Library, LibraryEntry
 from karaoke_buddy.core.runtime_paths import default_export_dir
 from karaoke_buddy.core.source_resolver import (
     SourceResolver,
@@ -40,11 +47,14 @@ log = logging.getLogger(__name__)
 _HOME_IDX = 0
 _PLAYING_IDX = 1
 
-_EXPORT_FORMATS: list[tuple[str, str, str]] = [
-    (".mp4", "MP4 video", "Keeps the karaoke video on screen."),
-    (".m4a", "M4A audio", "Audio only — small file, plays everywhere modern."),
-    (".mp3", "MP3 audio", "Audio only — works on older phones and car stereos."),
-]
+_DEFAULT_AUDIO_SUFFIX = ".mp3"
+_DEFAULT_VIDEO_SUFFIX = ".mp4"
+
+_FILTER_LABELS: dict[str, str] = {
+    ".mp4": "MP4 video (*.mp4)",
+    ".m4a": "M4A audio (*.m4a)",
+    ".mp3": "MP3 audio (*.mp3)",
+}
 
 
 def _ensure_export_suffix(path: str, suffix: str) -> str:
@@ -61,32 +71,174 @@ def _ensure_export_suffix(path: str, suffix: str) -> str:
     return path + suffix
 
 
-def _ask_export_format(parent: QWidget) -> Optional[str]:
-    """Modal asking the user which container/codec to export to.
+class _FormatCard(QFrame):
+    """Big clickable card with a built-in format selector.
 
-    Returns the chosen suffix (one of SUPPORTED_EXPORT_SUFFIXES) or None if
-    the user cancelled. The OS file-dialog's filter dropdown is buried in
-    its chrome and easy to miss, so we surface the choice as a first-class
-    in-app decision instead.
+    Clicking anywhere on the card body emits ``chose`` with the currently
+    selected suffix. The embedded QComboBox absorbs clicks on itself, so
+    opening the dropdown does not also trigger a save.
     """
-    box = QMessageBox(parent)
-    box.setWindowTitle("Save as…")
-    box.setIcon(QMessageBox.Icon.Question)
-    box.setText("How would you like to save this version?")
-    box.setInformativeText(
-        "Pick a format. Pitch shift and vocal reduction are baked in either way."
-    )
-    buttons: dict[QPushButton, str] = {}
-    for suffix, label, _description in _EXPORT_FORMATS:
-        btn = box.addButton(label, QMessageBox.ButtonRole.AcceptRole)
-        buttons[btn] = suffix
-    cancel = box.addButton(QMessageBox.StandardButton.Cancel)
-    box.setDefaultButton(next(iter(buttons)))
-    box.exec()
-    clicked = box.clickedButton()
-    if clicked is cancel or clicked is None:
-        return None
-    return buttons.get(clicked)  # type: ignore[arg-type]
+
+    chose = Signal(str)
+
+    def __init__(
+        self,
+        emoji: str,
+        title: str,
+        options: list[tuple[str, str]],
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self._suffix = options[0][0]
+        self.setObjectName("formatCard")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumSize(200, 200)
+        self.setStyleSheet(
+            "#formatCard {"
+            "  background: #f4f4f8;"
+            "  border: 2px solid #b8b8c4;"
+            "  border-radius: 14px;"
+            "}"
+            "#formatCard:hover {"
+            "  background: #e6e8ff;"
+            "  border-color: #5a6cff;"
+            "}"
+            "#formatCard QLabel { color: #14141c; background: transparent; }"
+        )
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 18, 16, 16)
+        layout.setSpacing(8)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        emoji_lbl = QLabel(emoji)
+        emoji_lbl.setStyleSheet("font-size: 38pt;")
+        emoji_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(emoji_lbl)
+
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet(
+            "font-size: 20pt; font-weight: 800; letter-spacing: 2px; color: #14141c;"
+        )
+        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title_lbl)
+
+        layout.addStretch()
+
+        if len(options) > 1:
+            self._combo: Optional[QComboBox] = QComboBox()
+            for suffix, label in options:
+                self._combo.addItem(label, suffix)
+            self._combo.currentIndexChanged.connect(self._on_combo_change)
+            self._combo.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._combo.setStyleSheet(
+                "QComboBox {"
+                "  background: white;"
+                "  color: #14141c;"
+                "  border: 1px solid #9a9aaa;"
+                "  border-radius: 6px;"
+                "  padding: 4px 8px;"
+                "  font-size: 11pt;"
+                "  min-width: 130px;"
+                "}"
+                "QComboBox::drop-down { border: none; width: 22px; }"
+                "QComboBox QAbstractItemView { background: white; color: #14141c; }"
+            )
+            layout.addWidget(self._combo, alignment=Qt.AlignmentFlag.AlignCenter)
+        else:
+            self._combo = None
+            static = QLabel(options[0][1])
+            static.setStyleSheet("font-size: 11pt; color: #44445a;")
+            static.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(static)
+
+    def _on_combo_change(self, idx: int) -> None:
+        assert self._combo is not None
+        self._suffix = self._combo.itemData(idx)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        # Children (the QComboBox) absorb clicks on themselves before this
+        # fires — so this branch runs for clicks on the card body only.
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.chose.emit(self._suffix)
+        super().mousePressEvent(event)
+
+
+class _ExportFormatDialog(QDialog):
+    """Grandma-friendly Save modal.
+
+    Two large AUDIO / VIDEO cards with codec dropdowns embedded inside.
+    Click anywhere on the card body to save in the format the dropdown
+    is showing. AUDIO defaults to MP3, VIDEO has only MP4.
+    """
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Save as…")
+        self.setModal(True)
+        self._chosen_suffix: Optional[str] = None
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(24, 24, 24, 16)
+        outer.setSpacing(14)
+
+        heading = QLabel("How would you like to save this?")
+        heading.setStyleSheet("font-size: 15pt; font-weight: 700; color: #14141c;")
+        heading.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(heading)
+
+        sub = QLabel("Your key and vocal-reduce settings are saved either way.")
+        sub.setStyleSheet("color: #5a5a72; font-size: 10pt;")
+        sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(sub)
+
+        card_row = QHBoxLayout()
+        card_row.setSpacing(18)
+
+        audio_card = _FormatCard(
+            "\U0001f3b5",
+            "AUDIO",
+            [
+                (".mp3", "MP3  (default)"),
+                (".m4a", "M4A  (smaller)"),
+            ],
+        )
+        audio_card.chose.connect(self._finish)
+        card_row.addWidget(audio_card)
+
+        video_card = _FormatCard(
+            "\U0001f3ac",
+            "VIDEO",
+            [(".mp4", "MP4")],
+        )
+        video_card.chose.connect(self._finish)
+        card_row.addWidget(video_card)
+
+        outer.addLayout(card_row)
+
+        footer = QHBoxLayout()
+        footer.addStretch()
+        cancel = QPushButton("Cancel")
+        cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        cancel.clicked.connect(self.reject)
+        footer.addWidget(cancel)
+        outer.addLayout(footer)
+
+    def _finish(self, suffix: str) -> None:
+        self._chosen_suffix = suffix
+        self.accept()
+
+    @property
+    def chosen_suffix(self) -> Optional[str]:
+        return self._chosen_suffix
+
+
+def _ask_export_format(parent: QWidget) -> Optional[str]:
+    """Returns the chosen suffix (one of SUPPORTED_EXPORT_SUFFIXES) or None on cancel."""
+    dialog = _ExportFormatDialog(parent)
+    if dialog.exec() == QDialog.DialogCode.Accepted:
+        return dialog.chosen_suffix
+    return None
 
 
 class _ResolveThread(QThread):
@@ -297,12 +449,11 @@ class MainWindow(QMainWindow):
         if self._player:
             self._player.set_speed(speed)
 
-    def _persist_settings(self, pitch: int) -> None:
+    def _persist_settings(self, pitch: int, vocal_reduce: int) -> None:
         if self._current_entry:
-            self._current_entry.last_pitch = pitch
-            self._library.upsert(self._current_entry)
+            self._library.touch(self._current_entry.id, pitch, vocal_reduce)
 
-    def _on_save(self, pitch: int) -> None:
+    def _on_save(self, pitch: int, vocal_reduce: int) -> None:
         if not self._current_entry:
             return
 
@@ -310,29 +461,25 @@ class MainWindow(QMainWindow):
         if chosen_suffix is None:
             return
 
-        default_dir = default_export_dir()
+        default_dir = default_export_dir(chosen_suffix)
         default_dir.mkdir(parents=True, exist_ok=True)
 
         key_str = f"key {pitch:+d}" if pitch != 0 else "normal key"
-        default_name = f"{self._current_entry.title} ({key_str}){chosen_suffix}"
-        filter_label = next(
-            f"{label} (*{suffix})"
-            for suffix, label, _ in _EXPORT_FORMATS
-            if suffix == chosen_suffix
-        )
+        vocal_str = " (vocals reduced)" if vocal_reduce > 0 else ""
+        default_name = f"{self._current_entry.title} ({key_str}){vocal_str}{chosen_suffix}"
 
         output_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save this version",
             str(default_dir / default_name),
-            filter_label,
+            _FILTER_LABELS[chosen_suffix],
         )
         if not output_path:
             return
 
         output_path = _ensure_export_suffix(output_path, chosen_suffix)
 
-        chain = build_filter_chain(pitch, 0)
+        chain = build_filter_chain(pitch, vocal_reduce)
         cached = Path(self._current_entry.cached_path or self._current_entry.source)
 
         progress = QProgressDialog("Saving\u2026", "Cancel", 0, 100, self)
@@ -343,23 +490,20 @@ class MainWindow(QMainWindow):
         self._export_threads.append(thread)
 
         thread.progress.connect(progress.setValue)
-        thread.finished.connect(lambda p: self._on_export_done(p, pitch, progress))
+        thread.finished.connect(lambda p: self._on_export_done(p, pitch, vocal_reduce, progress))
         thread.error.connect(lambda msg: self._show_error(msg, progress))
         progress.canceled.connect(thread.cancel)
         thread.start()
 
-    def _on_export_done(self, output_path: str, pitch: int, progress) -> None:
+    def _on_export_done(self, output_path: str, pitch: int, vocal_reduce: int, progress) -> None:
         progress.close()
         if self._current_entry:
-            self._current_entry.saved_outputs.append(
-                SavedOutput(
-                    path=output_path,
-                    pitch=pitch,
-                    vocal_reduce=0,
-                    saved_at=datetime.now(timezone.utc).isoformat(),
-                )
+            self._library.add_saved_output(
+                self._current_entry.id,
+                output_path,
+                pitch,
+                vocal_reduce=vocal_reduce,
             )
-            self._library.upsert(self._current_entry)
         QMessageBox.information(self, "Saved", f"Saved to:\n{output_path}")
 
     def _show_error(self, err: KBError | str, progress=None) -> None:

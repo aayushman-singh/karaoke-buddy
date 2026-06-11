@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Strict Content-Security-Policy. This page handles LOCAL audio files, so
+      we lock the origin set down to exactly what the demo needs and nothing
+      more — no external CDNs, no inline <script>, no remote fetches.
+        default-src 'self'      → everything defaults to same-origin only
+        script-src  'self'      → app.js + the worklet module are same-origin
+                                   ES modules; there is no inline JS to allow
+        style-src   'self'      → styles.css is an external same-origin sheet
+                                   (no inline style attributes / <style> used)
+        img-src 'self' data:    → the SVG favicon is a data: URI
+        media-src blob:         → decoded audio is fed to the worklet as
+                                   ArrayBuffers; file blobs/object URLs ride
+                                   the blob: scheme
+        connect-src 'self'      → the worklet module + any same-origin fetch
+                                   (mic capture uses getUserMedia, not fetch)
+        font-src 'self'         → system fonts only; no web-font requests
+        object-src 'none'; base-uri 'self'; form-action 'none'
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <title>Karaoke Buddy — Browser Preview</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0d12'/%3E%3Cpath d='M20 8v10.5a4 4 0 1 1-2-3.46V11l-6 1.4v7.6a4 4 0 1 1-2-3.46V10l10-2.3z' fill='%23ffb347'/%3E%3C/svg%3E"
+    />
+    <meta
+      name="description"
+      content="Hear live key-shifting and lead-vocal removal in your browser. A preview of the Karaoke Buddy desktop app."
+    />
+    <!-- System font stack only — no external font CDN (see CSP above). -->
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- Shown only when the browser lacks AudioWorklet. No silent fallback. -->
+    <div id="unsupported" class="unsupported" hidden>
+      <div class="unsupported__card">
+        <h1>This preview needs a modern browser</h1>
+        <p>
+          Karaoke Buddy's live engine relies on the Web Audio
+          <code>AudioWorklet</code> API, which this browser doesn't expose.
+          Try the latest Chrome, Edge, Firefox, or Safari.
+        </p>
+      </div>
+    </div>
+
+    <main class="stage" id="stage">
+      <!-- ── Hero ─────────────────────────────────────────────────── -->
+      <header class="hero">
+        <div class="hero__mark" aria-hidden="true">
+          <span class="hero__dot"></span>
+          <span class="hero__bars">
+            <i></i><i></i><i></i><i></i><i></i>
+          </span>
+        </div>
+        <h1 class="hero__title">Karaoke&nbsp;Buddy</h1>
+        <p class="hero__pitch">
+          Drop the key to fit your range and fade out the original singer —
+          live, in your browser.
+        </p>
+      </header>
+
+      <!-- ── Console ──────────────────────────────────────────────── -->
+      <section class="console" aria-label="Playback controls">
+        <!-- Transport -->
+        <div class="transport">
+          <button
+            id="playToggle"
+            class="play"
+            type="button"
+            aria-label="Play"
+            disabled
+          >
+            <svg class="play__icon play__icon--play" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            <svg class="play__icon play__icon--pause" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+            </svg>
+          </button>
+
+          <div class="transport__meta">
+            <div class="transport__now" id="trackLabel">Demo track — synthesized in-browser</div>
+            <div class="scrub">
+              <input
+                id="scrub"
+                class="scrub__input"
+                type="range"
+                min="0"
+                max="1000"
+                value="0"
+                step="1"
+                aria-label="Seek"
+              />
+              <div class="scrub__time">
+                <span id="timeNow">0:00</span>
+                <span id="timeTotal">0:00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- The hero control: Song key -->
+        <div class="control control--key">
+          <div class="control__head">
+            <label class="control__label" for="keySlider">Song key</label>
+            <output class="control__value" id="keyValue">Normal key</output>
+          </div>
+          <div class="keydial">
+            <input
+              id="keySlider"
+              class="keydial__input"
+              type="range"
+              min="-6"
+              max="6"
+              value="0"
+              step="1"
+              list="keyTicks"
+              aria-label="Song key in semitones"
+            />
+            <datalist id="keyTicks">
+              <option value="-6"></option>
+              <option value="-3"></option>
+              <option value="0"></option>
+              <option value="3"></option>
+              <option value="6"></option>
+            </datalist>
+            <div class="keydial__scale" aria-hidden="true">
+              <span>-6</span><span>-3</span><span class="is-zero">0</span><span>+3</span><span>+6</span>
+            </div>
+          </div>
+          <p class="control__hint">Same tempo, new key — shift up or down to land in your range.</p>
+
+          <!-- Match my key: tap, sing one note, we shift the song to fit. -->
+          <div class="match">
+            <button
+              id="matchKey"
+              class="match__btn"
+              type="button"
+              aria-label="Match my key — sing a note and shift the song to your range"
+            >
+              <svg class="match__icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"
+                />
+                <path
+                  d="M17 11a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"
+                />
+              </svg>
+              <span class="match__label">Match my key</span>
+            </button>
+            <div
+              id="matchMeter"
+              class="match__meter"
+              role="presentation"
+              aria-hidden="true"
+              hidden
+            >
+              <div id="matchMeterFill" class="match__meter-fill"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Silence the singer -->
+        <div class="control control--vocal">
+          <div class="control__head">
+            <label class="control__label" for="vocalSlider">Silence the singer</label>
+            <output class="control__value" id="vocalValue">0%</output>
+          </div>
+          <input
+            id="vocalSlider"
+            class="vocal__input"
+            type="range"
+            min="0"
+            max="100"
+            value="0"
+            step="1"
+            aria-label="Silence the singer percentage"
+          />
+          <p class="control__hint">
+            Fades the centred lead vocal so the room can hear <em>you</em>.
+          </p>
+        </div>
+
+        <!-- Source picker -->
+        <div class="source">
+          <span class="source__label">Source</span>
+          <div class="source__options">
+            <button
+              id="useDemo"
+              class="chip chip--active"
+              type="button"
+              aria-pressed="true"
+            >
+              Synth demo
+            </button>
+            <label class="chip chip--file" for="fileInput" tabindex="0">
+              Use my audio
+              <input id="fileInput" type="file" accept="audio/*" hidden />
+            </label>
+          </div>
+        </div>
+
+        <div id="status" class="status" role="status" aria-live="polite">
+          Preparing the demo track…
+        </div>
+      </section>
+
+      <!-- ── Footer / honesty note ────────────────────────────────── -->
+      <footer class="footer">
+        <p class="footer__note">
+          This browser preview uses
+          <a href="https://github.com/cutterbl/SoundTouchJS" target="_blank" rel="noopener"
+            >SoundTouch (WSOLA)</a
+          >, not the desktop's rubberband engine, so it demonstrates the
+          experience rather than byte-identical output. The desktop app proves
+          <strong>preview&nbsp;==&nbsp;export</strong>.
+        </p>
+        <div class="footer__cta">
+          <a
+            class="btn btn--primary"
+            href="https://github.com/aayushman-singh/karaoke-buddy/releases/download/v0.3.0/KaraokeBuddy.exe"
+            >Download for Windows</a
+          >
+          <a
+            class="btn btn--ghost"
+            href="https://github.com/aayushman-singh/karaoke-buddy"
+            >View the source</a
+          >
+        </div>
+      </footer>
+    </main>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>

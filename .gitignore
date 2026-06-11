@@ -16,3 +16,18 @@ library.json.corrupted-*
 Pitched Songs/
 data/
 *.tmp
+
+# Orchestration / local scratch — working notes kept on disk, out of the repo.
+# Durable engineering decisions live as ADRs under docs/adr/ instead.
+orchestrator*.log
+.playwright-mcp/
+demo-*.png
+scripts/*.wav
+STATE.md
+DECISIONS.md
+SESSION_SUMMARY.md
+SESSION_SUMMARY_V2.md
+HANDOFF.md
+HANDOFF_V2.md
+linkedin-post.txt
+codex/
