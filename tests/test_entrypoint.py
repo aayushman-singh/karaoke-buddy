@@ -3,6 +3,16 @@
 import os
 import sys
 
+import pytest
+
+# os.add_dll_directory only exists and is only invoked on Windows
+# (_setup_dll_search_path guards the call with sys.platform == "win32").
+# Asserting the call happened can only succeed on a Windows host.
+windows_only = pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="exercises the Windows-only os.add_dll_directory DLL search path",
+)
+
 
 def test_locate_bundled_returns_none_in_dev_mode(monkeypatch):
     """In non-frozen dev mode, _locate_bundled always returns None."""
@@ -85,6 +95,7 @@ def test_missing_bundled_dependency_message_ignores_dev_mode(monkeypatch):
     assert _missing_bundled_dependency_message(None) is None
 
 
+@windows_only
 def test_setup_dll_search_path_adds_meipass_in_frozen_mode(monkeypatch, tmp_path):
     """In frozen mode with sys._MEIPASS, os.add_dll_directory is called."""
     meipass = tmp_path / "meipass"
@@ -103,6 +114,7 @@ def test_setup_dll_search_path_adds_meipass_in_frozen_mode(monkeypatch, tmp_path
     assert str(meipass) in added
 
 
+@windows_only
 def test_setup_dll_search_path_adds_exe_parent_in_onedir_mode(monkeypatch, tmp_path):
     """In frozen onedir mode, exe.parent is made available to DLL loaders."""
     exe_parent = tmp_path / "dist"
