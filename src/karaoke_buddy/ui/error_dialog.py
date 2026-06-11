@@ -18,7 +18,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QDialog,
-    QDialogButtonBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -27,8 +27,28 @@ from PySide6.QtWidgets import (
 )
 
 from karaoke_buddy.core.errors import KBError
+from karaoke_buddy.ui import theme
 
 log = logging.getLogger(__name__)
+
+_ERROR_QSS = f"""
+QDialog {{ background: {theme.SURFACE}; }}
+QFrame#ErrBand {{ background: {theme.CORAL}; }}
+QLabel#ErrTitle {{ color: #fff; }}
+QFrame#ErrBand QLabel {{ background: transparent; }}
+QLabel#ErrCodeLbl {{ color: {theme.INK_2}; font-size: 13px; font-weight: 700; }}
+QLabel#CodeBadge {{
+    background: {theme.CHIP_BG}; color: {theme.CHIP_AMBER};
+    font-family: Consolas, "Courier New", monospace; font-weight: 800; font-size: 13px;
+    padding: 5px 12px; border-radius: 8px;
+}}
+QLabel#ErrMsg {{ color: {theme.INK}; font-size: 15px; font-weight: 600; }}
+QLabel#ErrHint {{ color: {theme.GREEN}; font-size: 14px; font-weight: 800; }}
+QLabel#ErrLogLbl {{ color: {theme.INK_3}; font-size: 12px; font-weight: 800; }}
+QLabel#ErrLogPath {{
+    color: {theme.INK_3}; font-family: Consolas, "Courier New", monospace; font-size: 11px;
+}}
+"""
 
 
 def _read_log_tail(log_path: Path, max_lines: int = 80) -> str:
@@ -69,80 +89,102 @@ class ErrorDialog(QDialog):
 
         self.setWindowTitle("KaraokeBuddy — something went wrong")
         self.setMinimumWidth(480)
-        self.setStyleSheet(
-            "QDialog { background: #2b2b2b; color: #eee; }"
-            "QLabel { color: #eee; }"
-            "QPushButton {"
-            "  color: #eee; background: #3a3a3a; border: 1px solid #555;"
-            "  padding: 6px 14px; border-radius: 4px;"
-            "}"
-            "QPushButton:hover { background: #474747; }"
-        )
+        self.setStyleSheet(_ERROR_QSS)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 18, 20, 18)
-        root.setSpacing(12)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
+        # ---- coral band with title ----
+        band = QFrame()
+        band.setObjectName("ErrBand")
+        band_row = QHBoxLayout(band)
+        band_row.setContentsMargins(24, 20, 24, 20)
+        band_row.setSpacing(14)
+        band_ic = QLabel()
+        band_ic.setPixmap(theme.icon("alert", "#FFFFFF", 26).pixmap(26, 26))
+        band_row.addWidget(band_ic, alignment=Qt.AlignmentFlag.AlignTop)
         title = QLabel(error.title)
-        title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        title.setObjectName("ErrTitle")
+        title.setFont(theme.display_font(19))
         title.setWordWrap(True)
-        root.addWidget(title)
+        band_row.addWidget(title, stretch=1)
+        root.addWidget(band)
+
+        # ---- body ----
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(24, 22, 24, 8)
+        body_layout.setSpacing(14)
 
         code_row = QHBoxLayout()
+        code_row.setSpacing(10)
         code_label = QLabel("Error code:")
-        code_label.setStyleSheet("color: #aaa;")
+        code_label.setObjectName("ErrCodeLbl")
         code_row.addWidget(code_label)
         code_badge = QLabel(error.code)
-        code_badge.setStyleSheet(
-            "background: #1f1f1f; color: #ffb74d; font-family: Consolas, monospace;"
-            "padding: 3px 8px; border-radius: 3px; font-weight: bold;"
-        )
+        code_badge.setObjectName("CodeBadge")
         code_badge.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         code_row.addWidget(code_badge)
         code_row.addStretch()
-        root.addLayout(code_row)
+        body_layout.addLayout(code_row)
 
         message = QLabel(error.user_message)
+        message.setObjectName("ErrMsg")
         message.setWordWrap(True)
-        root.addWidget(message)
+        body_layout.addWidget(message)
 
-        hint = QLabel(f"→ {error.hint}")
-        hint.setStyleSheet("color: #9fcf9f;")
+        hint_row = QHBoxLayout()
+        hint_row.setSpacing(8)
+        hint_ic = QLabel()
+        hint_ic.setPixmap(theme.icon("arrowRight", theme.GREEN, 18).pixmap(18, 18))
+        hint_row.addWidget(hint_ic, alignment=Qt.AlignmentFlag.AlignTop)
+        hint = QLabel(error.hint)
+        hint.setObjectName("ErrHint")
         hint.setWordWrap(True)
-        root.addWidget(hint)
+        hint_row.addWidget(hint, stretch=1)
+        body_layout.addLayout(hint_row)
 
         if log_path is not None:
             log_row = QHBoxLayout()
             log_caption = QLabel("Log file:")
-            log_caption.setStyleSheet("color: #aaa;")
-            log_row.addWidget(log_caption)
+            log_caption.setObjectName("ErrLogLbl")
+            log_row.addWidget(log_caption, alignment=Qt.AlignmentFlag.AlignTop)
             log_value = QLabel(str(log_path))
+            log_value.setObjectName("ErrLogPath")
             log_value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            log_value.setStyleSheet(
-                "color: #ccc; font-family: Consolas, monospace; font-size: 11px;"
-            )
             log_value.setWordWrap(True)
             log_row.addWidget(log_value, stretch=1)
-            root.addLayout(log_row)
+            body_layout.addLayout(log_row)
 
+        root.addWidget(body)
+
+        # ---- actions ----
         action_row = QHBoxLayout()
-        action_row.setSpacing(8)
+        action_row.setContentsMargins(24, 6, 24, 22)
+        action_row.setSpacing(10)
 
-        copy_btn = QPushButton("\U0001f4cb Copy details")
+        copy_btn = QPushButton("  Copy details")
+        copy_btn.setIcon(theme.icon("copy", "#FFFFFF", 17))
+        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         copy_btn.setToolTip("Copies error code + log tail to clipboard for support")
         copy_btn.clicked.connect(self._copy_details)
         action_row.addWidget(copy_btn)
 
         if log_path is not None:
-            open_btn = QPushButton("Open log folder")
+            open_btn = QPushButton("  Open log folder")
+            open_btn.setObjectName("GhostButton")
+            open_btn.setIcon(theme.icon("folder", theme.INK, 17))
+            open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             open_btn.clicked.connect(lambda: _open_in_explorer(log_path))
             action_row.addWidget(open_btn)
 
         action_row.addStretch()
 
-        close_btn = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        close_btn.rejected.connect(self.reject)
-        close_btn.accepted.connect(self.accept)
+        close_btn = QPushButton("Close")
+        close_btn.setObjectName("GhostButton")
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.clicked.connect(self.reject)
         action_row.addWidget(close_btn)
 
         root.addLayout(action_row)

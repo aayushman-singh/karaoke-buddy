@@ -16,10 +16,11 @@ from PySide6.QtWidgets import (
 )
 
 from karaoke_buddy.core.library import Library, LibraryEntry
+from karaoke_buddy.ui import theme
 
 log = logging.getLogger(__name__)
 
-_THUMB_W, _THUMB_H = 160, 90
+_THUMB_W, _THUMB_H = 168, 95
 _COLS = 4
 
 
@@ -29,13 +30,13 @@ class _EntryCard(QFrame):
     def __init__(self, entry: LibraryEntry, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._entry = entry
-        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setObjectName("LibCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedWidth(_THUMB_W + 8)
+        self.setFixedWidth(_THUMB_W + 6)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(4)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
 
         thumb_label = QLabel()
         thumb_label.setFixedSize(_THUMB_W, _THUMB_H)
@@ -44,23 +45,26 @@ class _EntryCard(QFrame):
             pix = QPixmap(entry.thumbnail_path).scaled(
                 _THUMB_W,
                 _THUMB_H,
-                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                 Qt.TransformationMode.SmoothTransformation,
             )
+            thumb_label.setObjectName("LibThumbReal")
             thumb_label.setPixmap(pix)
+            thumb_label.setScaledContents(False)
         else:
-            thumb_label.setText("\U0001f3b5")
-            thumb_label.setStyleSheet("background: #2a2a2a; font-size: 32px;")
+            # missing thumbnail → music placeholder (replaces the 🎵 emoji)
+            thumb_label.setObjectName("LibThumb")
+            thumb_label.setPixmap(theme.icon("music", theme.INK_3, 30, stroke=2.0).pixmap(30, 30))
         layout.addWidget(thumb_label)
 
         title_label = QLabel(entry.title)
+        title_label.setObjectName("LibTitle")
         title_label.setWordWrap(True)
         title_label.setMaximumWidth(_THUMB_W)
-        title_label.setStyleSheet("font-size: 12px;")
         layout.addWidget(title_label)
 
         hint = QLabel(_pitch_label(entry.last_pitch))
-        hint.setStyleSheet("font-size: 10px; color: #888;")
+        hint.setObjectName("LibPitch")
         layout.addWidget(hint)
 
     def mousePressEvent(self, event) -> None:  # type: ignore[override]
@@ -76,9 +80,10 @@ class LibraryView(QWidget):
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(10)
 
         heading = QLabel("Recent videos")
-        heading.setStyleSheet("font-size: 14px; font-weight: bold; padding: 8px 0;")
+        heading.setObjectName("LibHeading")
         outer.addWidget(heading)
 
         scroll = QScrollArea()
@@ -88,8 +93,11 @@ class LibraryView(QWidget):
 
         self._container = QWidget()
         self._grid = QGridLayout(self._container)
-        self._grid.setSpacing(12)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setSpacing(16)
         scroll.setWidget(self._container)
+
+        self._empty: Optional[QLabel] = None
 
         self.refresh()
 
@@ -100,11 +108,20 @@ class LibraryView(QWidget):
                 item.widget().deleteLater()
 
         entries = self._library.list()
+
+        if not entries:
+            empty = QLabel("Songs you open will show up here.")
+            empty.setObjectName("LibEmpty")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._grid.addWidget(empty, 0, 0, 1, _COLS)
+            self._grid.setRowStretch(1, 1)
+            return
+
         for i, entry in enumerate(entries):
             row, col = divmod(i, _COLS)
             card = _EntryCard(entry)
             card.clicked.connect(self.entry_selected)
-            self._grid.addWidget(card, row, col)
+            self._grid.addWidget(card, row, col, Qt.AlignmentFlag.AlignTop)
 
         self._grid.setRowStretch(max(1, (len(entries) // _COLS) + 1), 1)
 

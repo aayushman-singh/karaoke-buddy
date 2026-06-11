@@ -136,6 +136,8 @@ def build(*, onedir: bool) -> None:
         f"{BIN_DIR / 'deno.exe'};.",
         "--icon",
         str(ROOT / "src" / "karaoke_buddy" / "resources" / "icon.ico"),
+        "--add-data",
+        f"{ROOT / 'src' / 'karaoke_buddy' / 'resources' / 'fonts'};karaoke_buddy/resources/fonts",
         "--collect-all",
         "yt_dlp_ejs",
         "--hidden-import",

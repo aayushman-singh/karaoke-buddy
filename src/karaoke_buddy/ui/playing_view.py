@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from karaoke_buddy.core.filter_chain import build_mpv_filter_chain
 from karaoke_buddy.core.library import LibraryEntry
+from karaoke_buddy.ui import theme
 from karaoke_buddy.ui.video_surface import (
     PLAYBACK_SPEEDS,
     ClickJumpSlider,
@@ -88,27 +89,24 @@ class PlayingView(QWidget):
 
     def _build_header(self) -> QWidget:
         header = QWidget()
-        header.setFixedHeight(48)
-        header.setStyleSheet(
-            "QWidget { background: #1e1e1e; }"
-            "QPushButton {"
-            "  color: #ddd; background: transparent; border: none;"
-            "  font-size: 14px; padding: 6px 14px;"
-            "}"
-            "QPushButton:hover { background: rgba(255,255,255,0.08); border-radius: 4px; }"
-        )
+        header.setObjectName("PlayHeader")
+        header.setFixedHeight(52)
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setContentsMargins(10, 6, 10, 6)
         layout.setSpacing(6)
 
-        back_btn = QPushButton("←  Back to library")
+        back_btn = QPushButton("  Back to library")
+        back_btn.setObjectName("HeaderButton")
+        back_btn.setIcon(theme.icon("back", theme.INK, 20))
         back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         back_btn.clicked.connect(self.back_to_library.emit)
         layout.addWidget(back_btn)
 
         layout.addStretch()
 
-        self._fullscreen_btn = QPushButton("⛶  Full screen")
+        self._fullscreen_btn = QPushButton("  Full screen")
+        self._fullscreen_btn.setObjectName("HeaderButton")
+        self._fullscreen_btn.setIcon(theme.icon("maximize", theme.INK, 18))
         self._fullscreen_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._fullscreen_btn.setToolTip("Toggle full screen (Esc to exit)")
         self._fullscreen_btn.clicked.connect(self._toggle_fullscreen)
@@ -118,32 +116,16 @@ class PlayingView(QWidget):
 
     def _build_controls_panel(self) -> QWidget:
         panel = QWidget()
-        panel.setStyleSheet(
-            "QWidget { background: #1e1e1e; }"
-            "QLabel { color: #ddd; font-size: 12px; }"
-            "QPushButton {"
-            "  color: #eee; background: rgba(255,255,255,0.06); border: none;"
-            "  font-size: 14px; min-width: 36px; padding: 6px 10px; border-radius: 4px;"
-            "}"
-            "QPushButton:hover { background: rgba(255,255,255,0.14); }"
-            "QComboBox {"
-            "  color: #eee; background: #2a2a2a; border: 1px solid #444;"
-            "  padding: 4px 8px; min-width: 80px;"
-            "}"
-            "QSlider::groove:horizontal {"
-            "  height: 6px; background: #444; border-radius: 3px;"
-            "}"
-            "QSlider::handle:horizontal {"
-            "  width: 14px; margin: -5px 0; background: #fff; border-radius: 7px;"
-            "}"
-            "QSlider::sub-page:horizontal { background: #e53935; border-radius: 3px; }"
-        )
+        panel.setObjectName("ControlsPanel")
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(16, 10, 16, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(22, 16, 22, 18)
+        layout.setSpacing(14)
 
+        # ---- seek row ----
         timeline_row = QHBoxLayout()
+        timeline_row.setSpacing(14)
         self._time_label = QLabel("0:00")
+        self._time_label.setObjectName("TimeLabel")
         self._time_label.setFixedWidth(44)
         timeline_row.addWidget(self._time_label)
         self._timeline = ClickJumpSlider(Qt.Orientation.Horizontal)
@@ -151,48 +133,65 @@ class PlayingView(QWidget):
         self._timeline.sliderMoved.connect(self._on_seek_slider)
         timeline_row.addWidget(self._timeline, stretch=1)
         self._duration_label = QLabel("0:00")
+        self._duration_label.setObjectName("TimeLabel")
         self._duration_label.setFixedWidth(44)
         self._duration_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         timeline_row.addWidget(self._duration_label)
         layout.addLayout(timeline_row)
 
+        # ---- transport row ----
         transport_row = QHBoxLayout()
-        transport_row.setSpacing(10)
-        self._play_btn = QPushButton("▶")
-        self._play_btn.setFixedWidth(48)
+        transport_row.setSpacing(12)
+        self._play_btn = QPushButton()
+        self._play_btn.setObjectName("PlayCircle")
+        self._play_btn.setFixedSize(52, 52)
+        self._play_btn.setIcon(theme.icon("play", "#FFFFFF", 24))
+        self._play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._play_btn.setToolTip("Play / pause (Space)")
         self._play_btn.clicked.connect(self.play_pause_toggled.emit)
         transport_row.addWidget(self._play_btn)
 
-        vol_icon = QLabel("\U0001f50a")
-        vol_icon.setFixedWidth(24)
+        vol_icon = QLabel()
+        vol_icon.setPixmap(theme.icon("volume", theme.INK_2, 22).pixmap(22, 22))
+        vol_icon.setFixedWidth(26)
         transport_row.addWidget(vol_icon)
         self._volume = QSlider(Qt.Orientation.Horizontal)
         self._volume.setRange(0, 100)
         self._volume.setValue(100)
-        self._volume.setFixedWidth(120)
+        self._volume.setFixedWidth(130)
         self._volume.valueChanged.connect(self.volume_changed.emit)
         transport_row.addWidget(self._volume)
 
-        transport_row.addSpacing(20)
+        transport_row.addStretch()
 
-        transport_row.addWidget(QLabel("Speed"))
+        speed_lbl = QLabel("Speed")
+        speed_lbl.setObjectName("SpeedLabel")
+        transport_row.addWidget(speed_lbl)
         self._speed = QComboBox()
         for label, _ in PLAYBACK_SPEEDS:
             self._speed.addItem(label)
         self._speed.setCurrentIndex(2)
         self._speed.currentIndexChanged.connect(self._on_speed_index)
         transport_row.addWidget(self._speed)
-
-        transport_row.addStretch()
         layout.addLayout(transport_row)
 
-        pitch_section = QLabel("Song key")
-        pitch_section.setStyleSheet("font-weight: bold; color: #ddd; font-size: 13px;")
-        layout.addWidget(pitch_section)
+        # ---- pitch section ----
+        section = QHBoxLayout()
+        section.setSpacing(8)
+        section_ic = QLabel()
+        section_ic.setPixmap(theme.icon("music", theme.CORAL, 18, stroke=2.3).pixmap(18, 18))
+        section.addWidget(section_ic)
+        section_lbl = QLabel("Song key")
+        section_lbl.setObjectName("SectionLabel")
+        section.addWidget(section_lbl)
+        section.addStretch()
+        layout.addLayout(section)
 
         pitch_row = QHBoxLayout()
-        pitch_row.addWidget(QLabel("Lower"))
+        pitch_row.setSpacing(14)
+        lower_lbl = QLabel("Lower")
+        lower_lbl.setObjectName("EndCap")
+        pitch_row.addWidget(lower_lbl)
         self._pitch_slider = ClickJumpSlider(Qt.Orientation.Horizontal)
         self._pitch_slider.setRange(-12, 12)
         self._pitch_slider.setValue(0)
@@ -201,23 +200,22 @@ class PlayingView(QWidget):
         self._pitch_slider.setSingleStep(1)
         self._pitch_slider.valueChanged.connect(self._on_pitch_changed)
         pitch_row.addWidget(self._pitch_slider, stretch=1)
-        pitch_row.addWidget(QLabel("Higher"))
+        higher_lbl = QLabel("Higher")
+        higher_lbl.setObjectName("EndCap")
+        pitch_row.addWidget(higher_lbl)
         layout.addLayout(pitch_row)
 
         self._pitch_label = QLabel("Normal key")
+        self._pitch_label.setObjectName("PitchReadout")
         self._pitch_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._pitch_label.setStyleSheet("color: #aaa;")
+        self._pitch_label.setFont(theme.display_font(20))
         layout.addWidget(self._pitch_label)
 
-        self._save_btn = QPushButton("\U0001f4be  Save this version")
-        self._save_btn.setFixedHeight(44)
-        self._save_btn.setStyleSheet(
-            "QPushButton {"
-            "  font-size: 13px; background: #2a2a2a; color: #eee;"
-            "  border: 1px solid #444; border-radius: 4px;"
-            "}"
-            "QPushButton:hover { background: #353535; }"
-        )
+        self._save_btn = QPushButton("  Save this version")
+        self._save_btn.setObjectName("SaveButton")
+        self._save_btn.setFixedHeight(52)
+        self._save_btn.setIcon(theme.icon("save", "#FFFFFF", 22))
+        self._save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._save_btn.clicked.connect(self._on_save)
         layout.addWidget(self._save_btn)
 
@@ -249,7 +247,7 @@ class PlayingView(QWidget):
 
     def update_paused(self, paused: bool) -> None:
         self._paused = paused
-        self._play_btn.setText("▶" if paused else "⏸")
+        self._play_btn.setIcon(theme.icon("play" if paused else "pause", "#FFFFFF", 24))
 
     def set_volume(self, percent: int) -> None:
         self._volume.blockSignals(True)
@@ -305,5 +303,5 @@ class PlayingView(QWidget):
         if on == self._fullscreen:
             return
         self._fullscreen = on
-        self._fullscreen_btn.setText("⛶  Exit full screen" if on else "⛶  Full screen")
+        self._fullscreen_btn.setText("  Exit full screen" if on else "  Full screen")
         self.fullscreen_toggled.emit(on)

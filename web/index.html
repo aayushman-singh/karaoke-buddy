@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src 'self'; worker-src 'self'; child-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'" />
+<title>Karaoke Buddy — sing any song in your key</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body class="kbw web">
+
+  <!-- B1 · Hero -->
+  <header class="web-hero">
+    <div class="wh-dots" aria-hidden="true"></div>
+    <div class="wh-mark" aria-hidden="true">
+      <!-- music mark -->
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 18V5l11-2v11" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" />
+      </svg>
+    </div>
+    <h1>Karaoke Buddy</h1>
+    <p>Sing any song in your key — right here in your browser.</p>
+  </header>
+
+  <!-- B0 · Unsupported-browser gate (revealed by app.js when Web Audio is missing) -->
+  <div id="unsupported" class="web-unsupported" hidden>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4" /><path d="M12 17h.01" />
+    </svg>
+    <div>
+      <div class="wu-t">This browser can’t run the live preview</div>
+      <div class="wu-s">Karaoke Buddy’s web preview needs the Web Audio AudioWorklet, which this browser doesn’t support. Try the latest Chrome, Edge, or Firefox — or download the desktop app below.</div>
+    </div>
+  </div>
+
+  <!-- B2 · Console -->
+  <main class="web-body">
+    <section class="console" aria-label="Playback controls">
+
+      <!-- transport -->
+      <div class="web-transport">
+        <button id="playToggle" class="web-play" type="button" disabled aria-label="Play">
+          <svg class="ic-play" width="24" height="24" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" /></svg>
+          <svg class="ic-pause" width="24" height="24" viewBox="0 0 24 24" fill="#fff" aria-hidden="true" hidden><path d="M7 4h3.2v16H7z" /><path d="M13.8 4H17v16h-3.2z" /></svg>
+        </button>
+        <span id="curTime" class="web-time">0:00</span>
+        <input id="seekSlider" class="web-seek range" type="range" min="0" max="1000" value="0" step="1" disabled aria-label="Seek" />
+        <span id="durTime" class="web-time">0:00</span>
+      </div>
+
+      <!-- key -->
+      <div class="ctl-block">
+        <div class="ctl-top">
+          <span class="ctl-name">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--coral)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v11" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></svg>
+            Song key
+          </span>
+          <span id="keyReadout" class="ctl-read">Normal key</span>
+        </div>
+        <input id="keySlider" class="range ticks-key" type="range" min="-6" max="6" value="0" step="1" list="keyTicks" aria-label="Song key" />
+        <datalist id="keyTicks"><option value="-6"></option><option value="-3"></option><option value="0"></option><option value="3"></option><option value="6"></option></datalist>
+        <div class="ctl-ends"><span>Lower</span><span>Higher</span></div>
+      </div>
+
+      <!-- vocal -->
+      <div class="ctl-block">
+        <div class="ctl-top">
+          <span class="ctl-name">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--coral)" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /><path d="M19 5a9 9 0 0 1 0 14" /></svg>
+            Original singer
+          </span>
+          <span id="vocalReadout" class="ctl-read">Singer at full volume</span>
+        </div>
+        <input id="vocalSlider" class="range" type="range" min="0" max="100" value="0" step="1" aria-label="Original singer volume" />
+        <div class="ctl-ends"><span>Full volume</span><span>Almost gone</span></div>
+      </div>
+
+      <!-- match my key -->
+      <div class="match">
+        <div class="match-row">
+          <button id="matchKey" class="match-btn" type="button">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><path d="M12 19v3" /></svg>
+            <span id="matchLabel">Match my key</span>
+          </button>
+          <span id="matchHint" class="match-hint">Tap, then sing one steady note.</span>
+          <div id="matchMeter" class="match-meter" hidden><div id="matchFill" class="mm-fill"></div></div>
+        </div>
+      </div>
+
+      <!-- source picker -->
+      <div class="source-block">
+        <div class="note" id="srcNote">Demo song</div>
+        <div class="chips">
+          <button id="srcSynth" class="chip is-active" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /></svg>
+            Synth demo
+          </button>
+          <button id="srcFile" class="chip" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" /></svg>
+            Use my audio
+          </button>
+          <input id="fileInput" type="file" accept="audio/*" hidden />
+        </div>
+      </div>
+
+      <!-- shared status line -->
+      <div id="status" class="status neutral" role="status" aria-live="polite">
+        <svg class="st-ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16v-4" /><path d="M12 8h.01" /><circle cx="12" cy="12" r="9.2" /></svg>
+        <span id="statusText">Loading the demo song…</span>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- B3 · Footer -->
+  <footer class="web-footer">
+    <div class="honesty">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9a6a16" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16v-4" /><path d="M12 8h.01" /><circle cx="12" cy="12" r="9.2" /></svg>
+      <div>
+        <div class="ho-t">A quick honest note</div>
+        <div class="ho-s">This in-browser preview shifts pitch with a SoundTouch-style WSOLA engine running in the Web Audio worklet. The downloadable app uses a higher-quality engine (rubberband) — so the desktop result sounds a little cleaner than what you hear here.</div>
+      </div>
+    </div>
+    <div class="web-cta">
+      <a class="cta primary" href="https://github.com/aayushman-singh/karaoke-buddy/releases">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>
+        Download for Windows
+      </a>
+      <a class="cta ghost" href="https://github.com/aayushman-singh/karaoke-buddy">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17H7A5 5 0 0 1 7 7h2" /><path d="M15 7h2a5 5 0 1 1 0 10h-2" /><path d="M8 12h8" /></svg>
+        View the source
+      </a>
+    </div>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

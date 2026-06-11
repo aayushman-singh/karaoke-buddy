@@ -102,8 +102,11 @@ def _run_smoke_check(
     log = logging.getLogger(__name__)
     log.info("Launch smoke check imported UI modules: %s", ui_modules)
 
+    from karaoke_buddy.ui import theme
+
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName("KaraokeBuddy Smoke Check")
+    theme.apply(app)
     uncaught_exceptions: list[str] = []
     previous_excepthook = sys.excepthook
 
@@ -199,6 +202,10 @@ def main() -> None:
 
     app = QApplication(sys.argv)
     app.setApplicationName("KaraokeBuddy")
+
+    from karaoke_buddy.ui import theme
+
+    theme.apply(app)
     log.info("Qt application created")
 
     from karaoke_buddy.core.library import Library

@@ -9,10 +9,10 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -22,6 +22,7 @@ from karaoke_buddy.core.source_resolver import (
     is_youtube_url,
     youtube_extraction_options,
 )
+from karaoke_buddy.ui import theme
 from karaoke_buddy.ui.library_view import LibraryEntry, LibraryView
 
 log = logging.getLogger(__name__)
@@ -54,26 +55,95 @@ class _ClipMetaWorker(QThread):
             self.fetch_failed.emit()
 
 
+class _BigButton(QFrame):
+    """Large, friendly action card — icon + bold title + quiet subtitle.
+
+    A QFrame (not QPushButton) so the design's two-line label and icon chip
+    compose cleanly; it emits ``clicked`` like a button.
+    """
+
+    clicked = Signal()
+
+    def __init__(
+        self,
+        icon_name: str,
+        title: str,
+        subtitle: str,
+        primary: bool,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("BigPrimary" if primary else "BigGhost")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumHeight(84)
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(18, 16, 18, 16)
+        row.setSpacing(14)
+
+        chip = QLabel()
+        chip.setObjectName("BigIconChip")
+        chip.setFixedSize(46, 46)
+        chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_color = "#FFFFFF" if primary else theme.GOLD
+        chip.setPixmap(theme.icon(icon_name, icon_color, 26).pixmap(26, 26))
+        row.addWidget(chip)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(2)
+        title_lbl = QLabel(title)
+        title_lbl.setObjectName("BigTitle")
+        sub_lbl = QLabel(subtitle)
+        sub_lbl.setObjectName("BigSubtitle")
+        text_col.addWidget(title_lbl)
+        text_col.addWidget(sub_lbl)
+        row.addLayout(text_col)
+        row.addStretch()
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+
 class _PasteDialog(QDialog):
     def __init__(self, prefill: str = "", parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Open YouTube link")
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(440)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Paste a YouTube link:"))
+        layout.setContentsMargins(24, 22, 24, 20)
+        layout.setSpacing(14)
+
+        heading = QLabel("Open YouTube link")
+        heading.setFont(theme.display_font(20))
+        layout.addWidget(heading)
+
+        prompt = QLabel("Paste a YouTube link:")
+        prompt.setStyleSheet(f"color: {theme.INK_2}; font-size: 15px; font-weight: 700;")
+        layout.addWidget(prompt)
 
         self._field = QLineEdit(prefill)
-        self._field.setPlaceholderText("https://www.youtube.com/watch?v=\u2026")
+        self._field.setPlaceholderText("https://www.youtube.com/watch?v=…")
         layout.addWidget(self._field)
 
         self._warning = QLabel("")
-        self._warning.setStyleSheet("color: #e05c5c; font-size: 11px;")
+        self._warning.setObjectName("WarnLabel")
+        self._warning.setStyleSheet(
+            f"color: {theme.CORAL_DEEP}; font-size: 13px; font-weight: 800;"
+        )
         layout.addWidget(self._warning)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        ok_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        ok_btn.setText("OK")
+        cancel_btn = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        cancel_btn.setObjectName("GhostButton")
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -101,37 +171,58 @@ class HomeView(QWidget):
         self._clip_meta_worker: Optional[_ClipMetaWorker] = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 24, 24, 24)
-        root.setSpacing(16)
+        root.setContentsMargins(34, 30, 34, 26)
+        root.setSpacing(22)
 
-        title = QLabel("KaraokeBuddy \U0001f3a4")
-        title.setStyleSheet("font-size: 28px; font-weight: bold;")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        root.addWidget(title)
+        # ---- brand block ----
+        brand = QVBoxLayout()
+        brand.setSpacing(8)
+        brand.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
+        mark = QLabel()
+        mark.setObjectName("BrandMark")
+        mark.setFixedSize(60, 60)
+        mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        mark.setPixmap(theme.icon("music", "#FFFFFF", 30, stroke=2.3).pixmap(30, 30))
+        brand.addWidget(mark, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+        name = QLabel("Karaoke Buddy")
+        name.setFont(theme.display_font(34))
+        name.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        brand.addWidget(name)
+
+        tag = QLabel("Open a song. Sing it in your key.")
+        tag.setObjectName("BrandTag")
+        tag.setStyleSheet(f"color: {theme.INK_2}; font-size: 15px; font-weight: 700;")
+        tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        brand.addWidget(tag)
+        root.addLayout(brand)
+
+        # ---- big action buttons ----
         btn_row = QHBoxLayout()
         btn_row.setSpacing(16)
 
-        self._btn_open = QPushButton("Open a video file")
-        self._btn_open.setFixedHeight(56)
-        self._btn_open.setStyleSheet("font-size: 15px;")
+        self._btn_open = _BigButton(
+            "folder", "Open a video file", "From your computer", primary=True
+        )
         self._btn_open.clicked.connect(self._on_open_file)
         btn_row.addWidget(self._btn_open)
 
-        self._btn_paste = QPushButton("Paste YouTube link")
-        self._btn_paste.setFixedHeight(56)
-        self._btn_paste.setStyleSheet("font-size: 15px;")
+        self._btn_paste = _BigButton(
+            "link", "Paste YouTube link", "From the internet", primary=False
+        )
         self._btn_paste.clicked.connect(self._on_paste_url)
         btn_row.addWidget(self._btn_paste)
-
         root.addLayout(btn_row)
 
+        # ---- clipboard hint pill (4 states) ----
         self._clip_label = QLabel("")
-        self._clip_label.setStyleSheet("color: #7ec8e3; font-size: 12px;")
+        self._clip_label.setObjectName("ClipHint")
         self._clip_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._clip_label.hide()
-        root.addWidget(self._clip_label)
+        root.addWidget(self._clip_label, alignment=Qt.AlignmentFlag.AlignHCenter)
 
+        # ---- recent library ----
         self._library_view = LibraryView(library)
         self._library_view.entry_selected.connect(self.entry_selected)
         root.addWidget(self._library_view, stretch=1)
@@ -164,7 +255,7 @@ class HomeView(QWidget):
             if text != self._last_clip_url:
                 # New URL — start async title fetch
                 self._last_clip_url = text
-                self._clip_label.setText("\U0001f3b5 Fetching title\u2026")
+                self._clip_label.setText("Fetching title…")
                 self._clip_label.show()
 
                 prev = self._clip_meta_worker
@@ -181,8 +272,7 @@ class HomeView(QWidget):
                 worker.title_ready.connect(lambda title, url=text: self._on_clip_title(title, url))
                 worker.fetch_failed.connect(
                     lambda: self._clip_label.setText(
-                        "\U0001f3b5 YouTube link detected"
-                        " \u2014 click \u201cPaste YouTube link\u201d to open"
+                        "YouTube link detected — click “Paste YouTube link” to open"
                     )
                 )
                 worker.finished.connect(self._on_clip_worker_finished)
@@ -196,7 +286,7 @@ class HomeView(QWidget):
     def _on_clip_title(self, title: str, url: str) -> None:
         """Called from the worker thread via Signal — always on the Qt main thread."""
         if url == self._last_clip_url:  # guard against stale workers
-            self._clip_label.setText(f"Paste this? \U0001f3b5  {title}")
+            self._clip_label.setText(f"Paste this?   {title}")
             self._clip_label.show()
 
     def _on_clip_worker_finished(self) -> None:

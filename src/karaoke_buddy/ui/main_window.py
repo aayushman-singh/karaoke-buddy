@@ -7,12 +7,18 @@ from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
     QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
     QPushButton,
     QStackedWidget,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -28,6 +34,7 @@ from karaoke_buddy.core.source_resolver import (
     is_youtube_url,
     youtube_runtime_diagnostics,
 )
+from karaoke_buddy.ui import theme
 from karaoke_buddy.ui.error_dialog import ErrorDialog
 from karaoke_buddy.ui.home_view import HomeView
 from karaoke_buddy.ui.playing_view import PlayingView
@@ -46,6 +53,19 @@ _EXPORT_FORMATS: list[tuple[str, str, str]] = [
     (".mp3", "MP3 audio", "Audio only — works on older phones and car stereos."),
 ]
 
+_SAVE_QSS = f"""
+QDialog {{ background: {theme.SURFACE}; }}
+QLabel#SaveSub {{ color: {theme.INK_2}; font-size: 14px; font-weight: 600; }}
+QFrame#FmtCard {{
+    background: {theme.SURFACE}; border: 2px solid {theme.LINE_2}; border-radius: 14px;
+}}
+QFrame#FmtCard:hover {{ border-color: {theme.CORAL}; }}
+QLabel#FmtIcon {{ background: {theme.CORAL_SOFT}; border-radius: 14px; }}
+QLabel#FmtDesc {{ color: {theme.INK_2}; font-size: 13px; font-weight: 600; }}
+QLabel#FmtSubLbl {{ color: {theme.INK_3}; font-size: 11px; font-weight: 800; }}
+QLabel#FmtFixedFormat {{ color: {theme.INK_2}; font-size: 13px; font-weight: 800; }}
+"""
+
 
 def _ensure_export_suffix(path: str, suffix: str) -> str:
     """Append `suffix` to `path` if it is missing.
@@ -61,6 +81,138 @@ def _ensure_export_suffix(path: str, suffix: str) -> str:
     return path + suffix
 
 
+class _FormatCard(QFrame):
+    """A big, clickable format card. Clicking the card body commits the save;
+    child controls (the audio dropdown) handle their own clicks and do not."""
+
+    def __init__(
+        self,
+        icon_name: str,
+        title: str,
+        description: str,
+        on_commit,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("FmtCard")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._on_commit = on_commit
+
+        col = QVBoxLayout(self)
+        col.setContentsMargins(20, 20, 20, 20)
+        col.setSpacing(12)
+
+        chip = QLabel()
+        chip.setObjectName("FmtIcon")
+        chip.setFixedSize(54, 54)
+        chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        chip.setPixmap(theme.icon(icon_name, theme.CORAL, 28).pixmap(28, 28))
+        col.addWidget(chip)
+
+        title_lbl = QLabel(title)
+        title_lbl.setObjectName("FmtTitle")
+        title_lbl.setFont(theme.display_font(18))
+        col.addWidget(title_lbl)
+
+        desc_lbl = QLabel(description)
+        desc_lbl.setObjectName("FmtDesc")
+        desc_lbl.setWordWrap(True)
+        col.addWidget(desc_lbl)
+
+        self._sub_row = QHBoxLayout()
+        self._sub_row.setSpacing(8)
+        sub_lbl = QLabel("Format")
+        sub_lbl.setObjectName("FmtSubLbl")
+        self._sub_row.addWidget(sub_lbl)
+        col.addStretch()
+        col.addLayout(self._sub_row)
+
+    def add_format_widget(self, widget: QWidget) -> None:
+        self._sub_row.addWidget(widget)
+        self._sub_row.addStretch()
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._on_commit()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+
+class _SaveFormatDialog(QDialog):
+    """Grandma-friendly export chooser: two big cards (Audio with an MP3/M4A
+    dropdown, Video = MP4). Same three suffixes as the cited source; only the
+    presentation changes. The chosen suffix is read via ``chosen``."""
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Save as…")
+        self.setMinimumWidth(560)
+        self.setStyleSheet(_SAVE_QSS)
+        self.chosen: Optional[str] = None
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(26, 24, 26, 22)
+        root.setSpacing(16)
+
+        title = QLabel("How would you like to save this version?")
+        title.setObjectName("SaveTitle")
+        title.setFont(theme.display_font(20))
+        title.setWordWrap(True)
+        root.addWidget(title)
+
+        sub = QLabel("Pick a format. Pitch shift and vocal reduction are baked in either way.")
+        sub.setObjectName("SaveSub")
+        sub.setWordWrap(True)
+        root.addWidget(sub)
+
+        cards = QHBoxLayout()
+        cards.setSpacing(16)
+
+        # Audio card — dropdown selects between the two audio suffixes.
+        self._audio_combo = QComboBox()
+        for suffix, label, _desc in _EXPORT_FORMATS:
+            if suffix != ".mp4":
+                self._audio_combo.addItem(label.split()[0], suffix)  # "M4A"/"MP3"
+        audio_card = _FormatCard(
+            "headphones",
+            "Audio",
+            "Just the sound — great for the car, phone, or a speaker.",
+            self._commit_audio,
+        )
+        audio_card.add_format_widget(self._audio_combo)
+        cards.addWidget(audio_card)
+
+        video_card = _FormatCard(
+            "film",
+            "Video",
+            "Keeps the karaoke video on screen. Saved as an MP4.",
+            self._commit_video,
+        )
+        mp4_lbl = QLabel("MP4")
+        mp4_lbl.setObjectName("FmtFixedFormat")
+        video_card.add_format_widget(mp4_lbl)
+        cards.addWidget(video_card)
+        root.addLayout(cards)
+
+        actions = QHBoxLayout()
+        actions.addStretch()
+        cancel = QPushButton("Cancel")
+        cancel.setObjectName("GhostButton")
+        cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        cancel.clicked.connect(self.reject)
+        actions.addWidget(cancel)
+        root.addLayout(actions)
+
+    def _commit_audio(self) -> None:
+        self.chosen = self._audio_combo.currentData()
+        self.accept()
+
+    def _commit_video(self) -> None:
+        self.chosen = ".mp4"
+        self.accept()
+
+
 def _ask_export_format(parent: QWidget) -> Optional[str]:
     """Modal asking the user which container/codec to export to.
 
@@ -69,24 +221,10 @@ def _ask_export_format(parent: QWidget) -> Optional[str]:
     its chrome and easy to miss, so we surface the choice as a first-class
     in-app decision instead.
     """
-    box = QMessageBox(parent)
-    box.setWindowTitle("Save as…")
-    box.setIcon(QMessageBox.Icon.Question)
-    box.setText("How would you like to save this version?")
-    box.setInformativeText(
-        "Pick a format. Pitch shift and vocal reduction are baked in either way."
-    )
-    buttons: dict[QPushButton, str] = {}
-    for suffix, label, _description in _EXPORT_FORMATS:
-        btn = box.addButton(label, QMessageBox.ButtonRole.AcceptRole)
-        buttons[btn] = suffix
-    cancel = box.addButton(QMessageBox.StandardButton.Cancel)
-    box.setDefaultButton(next(iter(buttons)))
-    box.exec()
-    clicked = box.clickedButton()
-    if clicked is cancel or clicked is None:
-        return None
-    return buttons.get(clicked)  # type: ignore[arg-type]
+    dialog = _SaveFormatDialog(parent)
+    if dialog.exec() == QDialog.DialogCode.Accepted:
+        return dialog.chosen
+    return None
 
 
 class _ResolveThread(QThread):
