@@ -77,6 +77,15 @@ function setStatus(kind, text) {
   el.statusText.textContent = text;
 }
 
+function setEngineControlsEnabled(enabled) {
+  el.play.disabled = !enabled;
+  el.seek.disabled = !enabled;
+  el.match.disabled = !enabled;
+  el.srcSynth.disabled = !enabled;
+  el.srcFile.disabled = !enabled;
+  el.fileInput.disabled = !enabled;
+}
+
 function fmtTime(sec) {
   if (!isFinite(sec)) sec = 0;
   const s = Math.floor(sec);
@@ -232,29 +241,36 @@ function selectSource(which) {
 }
 
 el.srcSynth.addEventListener('click', () => {
-  if (state.source === 'synth') return;
+  if (!state.ready || state.source === 'synth') return;
   selectSource('synth');
   el.srcNote.textContent = 'Demo song';
   loadBuffer(buildDemo(state.ctx.sampleRate));
   setStatus('ok', 'Back to the demo song.');
 });
 
-el.srcFile.addEventListener('click', () => el.fileInput.click());
+el.srcFile.addEventListener('click', () => {
+  if (!state.ready) return;
+  el.fileInput.click();
+});
 
 el.fileInput.addEventListener('change', async () => {
   const file = el.fileInput.files[0];
   if (!file) return;
   el.fileInput.value = '';
+  if (!state.ready) {
+    rejectFile('The audio engine is not ready. No change made.');
+    return;
+  }
   // size gate (40MB)
   if (file.size > 40 * 1024 * 1024) {
-    restoreDemo('That file is over 40 MB — showing the demo song instead.');
+    rejectFile('That file is over 40 MB. No change made.');
     return;
   }
   try {
     const data = await file.arrayBuffer();
     const decoded = await state.ctx.decodeAudioData(data);
     if (decoded.duration > 6 * 60) {
-      restoreDemo('That file is over 6 minutes — showing the demo song instead.');
+      rejectFile('That file is over 6 minutes. No change made.');
       return;
     }
     const left = decoded.getChannelData(0);
@@ -264,14 +280,11 @@ el.fileInput.addEventListener('change', async () => {
     loadBuffer({ left: Float32Array.from(left), right: Float32Array.from(right), sampleRate: decoded.sampleRate, duration: decoded.duration });
     setStatus('ok', 'Loaded your audio — press play.');
   } catch (err) {
-    restoreDemo('Couldn’t read that audio file — showing the demo song instead.');
+    rejectFile('Couldn’t read that audio file. No change made.');
   }
 });
 
-function restoreDemo(message) {
-  selectSource('synth');
-  el.srcNote.textContent = 'Demo song';
-  loadBuffer(buildDemo(state.ctx.sampleRate));
+function rejectFile(message) {
   setStatus('error', message);
 }
 
@@ -393,6 +406,7 @@ function acf(buf, lag) {
 // ---------- boot ----------
 async function boot() {
   // initialise readouts + fills
+  setEngineControlsEnabled(false);
   el.keyRead.textContent = pitchLabel(+el.key.value);
   el.vocalRead.textContent = vocalLabel(+el.vocal.value);
   updateRangeFill(el.key);
@@ -401,9 +415,6 @@ async function boot() {
 
   if (!supported()) {
     el.unsupported.hidden = false;
-    el.play.disabled = true;
-    el.seek.disabled = true;
-    el.match.disabled = true;
     setStatus('neutral', 'Live preview unavailable in this browser.');
     return;
   }
@@ -414,15 +425,12 @@ async function boot() {
     loadBuffer(buildDemo(state.ctx.sampleRate));
   } catch (err) {
     setStatus('error', 'Couldn’t start the audio engine in this browser.');
-    el.play.disabled = true;
-    el.match.disabled = true;
     return;
   }
 
   // transport gated until the demo buffer is ready — now it is
   state.ready = true;
-  el.play.disabled = false;
-  el.seek.disabled = false;
+  setEngineControlsEnabled(true);
   setStatus('ok', 'Ready — press play, or tap Match my key.');
 }
 

@@ -30,12 +30,12 @@ SURFACE = "#FFFFFF"
 INSET = "#F1E7D7"
 INK = "#241A12"
 INK_2 = "#6E6053"
-INK_3 = "#A2937F"
+INK_3 = "#746654"
 LINE = "#E7DAC6"
 LINE_2 = "#D9C9B0"
 
-CORAL = "#E8513A"
-CORAL_DEEP = "#C73A24"
+CORAL = "#B83420"
+CORAL_DEEP = "#9B2618"
 CORAL_SOFT = "#FCE5DD"
 GOLD = "#F2A23C"
 GOLD_SOFT = "#FCEDD5"
@@ -292,7 +292,7 @@ QFrame#BigPrimary QLabel#BigSubtitle {{ color: rgba(255,255,255,0.85); }}
 
 /* ---- home: clipboard hint pill ---- */
 QLabel#ClipHint {{
-    background: {GOLD_SOFT}; color: #9a6a16; border: 1px solid #efd8a8;
+    background: {GOLD_SOFT}; color: {INK_2}; border: 1px solid #efd8a8;
     border-radius: 999px; padding: 10px 18px; font-size: 14px; font-weight: 800;
 }}
 

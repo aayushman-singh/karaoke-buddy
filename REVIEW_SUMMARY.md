@@ -1,52 +1,34 @@
-# REVIEW_SUMMARY — coral restyle adversarial review + fix
+# REVIEW_SUMMARY — coral restyle adversarial review
 
-Scope: the "bold & joyful coral" restyle on `main` (commit `96cd6f7`). Method:
-`codex exec` brutal senior review of the restyle diff
-(`src/karaoke_buddy/ui/**`, `build/build.py`, `__main__.py`), each finding then
-triaged against the **pre-restyle** code (`1d0378b`) to separate real
-regressions from pre-existing behaviour and from deliberate design tokens.
+Scope: current `origin/main` restyle surface, reviewed as `1d0378b..528d48a`
+plus this follow-up fix. The required `codex exec --skip-git-repo-check ...`
+command was run and saved in `REVIEW_EVIDENCE.md`; that nested Codex session
+could not inspect the repo because its Windows sandbox failed with
+`windows sandbox: spawn setup refresh`, so I performed the required explicit
+diff-only no-tools review.
 
-## Codex findings — verdicts
+## Findings and actions
 
-| # | Finding | Verdict | Action |
-|---|---------|---------|--------|
-| 1 | `home_view._BigButton` — Open-file / Paste-URL cards are mouse-only `QFrame`s (no tab focus, no Enter/Space, no a11y name) | **Real regression** — pre-restyle these were `QPushButton`s (keyboard-operable). Keyboard users could no longer open a file or paste a link. | **Fixed** |
-| 2 | `main_window._FormatCard` — Audio/Video save cards are mouse-only `QFrame`s | **Real regression** — pre-restyle the chooser was a `QMessageBox` with real buttons. Keyboard users could reach Cancel/combo but could not commit a save. | **Fixed** |
-| 4 | `playing_view._play_btn` — icon-only, no accessible name | Minor a11y gap. It is a real `QPushButton` (already tab-focusable) and Space toggles play via a global `keyPressEvent`, so no loss of function. | **Fixed** (cheap: added accessible name) |
-| 3 | White text on coral `#E8513A` ≈ 3.7:1 — below WCAG AA for normal text | **Not a regression / deliberate.** The single coral accent is the design handoff's chosen brand token. The coral surfaces (big primary card, format cards, Save button) carry large/bold text (≥18px 800-weight), which clears AA-large (3:1). Changing the brand colour would diverge from the cited design. | **Flagged, not changed** |
-| 5 | Save dialog copy says "vocal reduction … baked in" but export calls `build_filter_chain(pitch, 0)` | **Pre-existing, out of scope.** Identical in `1d0378b` (`build_filter_chain(pitch, 0)`, `vocal_reduce=0`, same copy). The restyle preserved it 1:1 as claimed. | **Flagged only** |
-
-## Fixes applied (visual-neutral, keyboard/a11y only)
-
-- `ui/home_view.py` — `_BigButton`: `StrongFocus` focus policy, `keyPressEvent`
-  (Return/Enter/Space → `clicked`), accessible name = title, description =
-  subtitle.
-- `ui/main_window.py` — `_FormatCard`: same `StrongFocus` + Enter/Space →
-  `_on_commit`, accessible name/description; `_SaveFormatDialog` now lands
-  initial focus on the Audio card (a commit control) instead of Cancel.
-- `ui/playing_view.py` — play/pause button gains `setAccessibleName`.
-- `ui/theme.py` / `ui/main_window.py` QSS — `:focus` rings for `#BigPrimary`,
-  `#BigGhost`, `#FmtCard` so keyboard focus is visible (geometry kept stable by
-  reserving the border width in the resting state).
-
-No colours, copy, labels, control ranges, or signal wiring changed — fixes are
-keyboard/screen-reader parity only, matching the restyle's "1:1 behaviour"
-contract.
+| Finding | Verdict | Action |
+|---|---|---|
+| Home action cards and save-format cards had already been converted back to keyboard-operable controls in `f3d215c`. | Real restyle regressions, already fixed on `origin/main`. | Verified retained. |
+| Normal-size white text on coral `#E8513A` was only 3.70:1, and quiet/gold text tokens also missed AA normal-text contrast. | Real a11y gap from the restyle, not just taste. Several affected labels/buttons are 13-16px text. | Darkened coral tokens to `#B83420` / `#9B2618`, darkened `INK_3`, and replaced low-contrast gold notice text with `INK_2` on Qt and web. Added contrast regression tests. |
+| Web demo file-load failures restored the synth demo (`restoreDemo`) on oversized/too-long/unreadable files. | Real state/flow gap: a failed file action changed the current source instead of failing loudly and stopping dependent work. | Replaced fallback with `rejectFile(...)`; errors now say `No change made.` and preserve the current source/buffer. Source buttons/file input stay disabled until the audio engine is ready. Added regression test. |
+| Desktop save dialog says vocal reduction is baked in, while export still passes `vocal_reduce=0`. | Pre-existing in `1d0378b`, not caused by this restyle. | Flagged only. |
+| Library recent-entry cards are mouse-only `QFrame`s. | Pre-existing before the restyle. | Flagged only; not changed under restyle scope. |
 
 ## Verification
 
-- `ruff check .` → All checks passed.
-- `ruff format --check .` → 39 files already formatted.
-- `QT_QPA_PLATFORM=offscreen pytest --ignore=tests/test_exporter.py` →
-  **153 passed** (mirrors CI `lint-and-test`; exporter tests need the runner's
-  FFmpeg build, excluded as in CI).
+- `codex exec --skip-git-repo-check "brutal senior review of this UI restyle — broken UI handlers/state, lost functionality, a11y/contrast, did anything break the preview/export/playback flow. Terse."` → command completed, but nested inspection was blocked by its local Windows sandbox; evidence saved in `REVIEW_EVIDENCE.md`.
+- `pytest tests/test_restyle_contracts.py -q` → `4 passed`.
+- Playwright against `http://127.0.0.1:8765` → app booted; only console error was browser auto-requesting missing `/favicon.ico`; controls enabled after boot; oversized file showed `That file is over 40 MB. No change made.` while keeping `Demo song` active; 375px viewport had no horizontal overflow.
+- `ruff check --fix . && ruff format .` → all checks passed, 40 files unchanged.
+- `just lint` → all checks passed, 40 files already formatted.
+- `just test` → `157 passed` (`pytest --ignore=tests/test_exporter.py`).
 
-## Out of scope (flagged for the owner)
+## Residual risks
 
-- **Web-demo `preview≡export` equivalence** lives on open PR #14 and still fails
-  (`cosine 0.9465 < 0.97`). That is a DSP fix, a separate job — untouched here.
-- **Vocal-reduction export wiring** (finding #5): the desktop save path has
-  always hardcoded `vocal_reduce=0` while the dialog copy advertises vocal
-  reduction. Pre-existing; either wire vocal state through preview/export/library
-  or drop the claim. Tracked here for a follow-up; not fixed under the restyle
-  scope.
+- Web-demo `preview≡export` DSP equivalence remains separate PR #14 scope
+  (`cosine 0.9465 < 0.97`) and was not touched.
+- Desktop export still does not wire vocal-reduction state into saved output;
+  this was present before the restyle and needs a separate product decision.
