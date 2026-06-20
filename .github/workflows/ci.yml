@@ -15,7 +15,7 @@ jobs:
         python-version: ["3.11", "3.12"]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # PySide6's QtGui dynamically links libEGL/libGL even under the
       # offscreen platform plugin, so importing it fails on bare runners
